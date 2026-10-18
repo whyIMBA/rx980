@@ -1,0 +1,59 @@
+name: Board report
+description: Tell us how sharkfin behaves on your keyboard
+title: "[board] "
+labels: ["board"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Open sharkfin, go to the **Contribute** tab, click **Collect data
+        bundle**, then **Copy**. Paste it below. That's the whole job.
+  - type: input
+    id: board
+    attributes:
+      label: Keyboard
+      placeholder: Attack Shark X65HE
+    validations:
+      required: true
+  - type: dropdown
+    id: works
+    attributes:
+      label: Does it work?
+      options:
+        - Everything I tried worked
+        - Mostly works, something is off
+        - Does not work
+        - sharkfin says it is not in its list
+    validations:
+      required: true
+  - type: dropdown
+    id: edge
+    attributes:
+      label: Edge lighting
+      description: Lights along the sides or underneath, apart from the keys.
+      options:
+        - "No"
+        - "Yes"
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: bundle
+    attributes:
+      label: Data bundle
+      description: Pasted from the Contribute tab.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: photo
+    attributes:
+      label: Photo
+      description: A photo of the whole board from above, dropped here. It settles the key layout faster than anything else.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything off?
+      description: >
+        Wrong key positions, lighting that doesn't match, settings that snap
+        back, anything that looked wrong.

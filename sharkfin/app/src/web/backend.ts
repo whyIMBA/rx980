@@ -1,0 +1,550 @@
+// SPDX-FileCopyrightText: JR Lanteigne <root@dnim.dev>
+// SPDX-FileCopyrightText: Shiroki Satsuki <me@shirok1.dev>
+// SPDX-License-Identifier: GPL-3.0-or-later
+// The browser build's stand-in for src/lib/backend.ts: same names, same
+// types, same behaviour, but the commands run in the wasm core over WebHID
+// instead of crossing the Tauri bridge. The vite web config aliases
+// "@/lib/backend" here; nothing else in the UI changes.
+
+import init, * as core from "../../src-web/pkg/sharkfin_web";
+import { takePicked } from "./file-store";
+import { isSettingsCollection, requestFilters, USAGE_PAGE } from "./collections";
+
+export const BUILD: "app" | "browser" = "browser";
+
+export interface DeviceFeatures {
+  knob: string[];
+  debounce: boolean;
+  sleep24: boolean;
+  sleepBT: boolean;
+  magneticSwitches: boolean;
+  screen: boolean;
+  sideLight: boolean;
+}
+
+/** One switch model a board takes: the wire code and the vendor's name. */
+export interface SwitchType {
+  code: number;
+  name: string;
+}
+
+export interface TravelRange {
+  min?: number | null;
+  max?: number | null;
+  step?: number | null;
+  default?: number | null;
+}
+
+export interface ScreenSpec {
+  w: number;
+  h: number;
+  /** `16` is RGB565, `24` is three bytes a pixel. */
+  mode: string;
+  layers: number;
+}
+
+export interface DeviceSpec {
+  id: number;
+  name: string;
+  displayName?: string;
+  company?: string;
+  vendor: string;
+  vendorId: number;
+  productId: number;
+  internalName: string;
+  keyLayout: string;
+  lightLayout: string;
+  profiles: number;
+  magnetic?: boolean;
+  family?: string;
+  /** The display, absent on a board without one. */
+  screen?: ScreenSpec | null;
+  features: DeviceFeatures;
+  /** Ranges the vendor's UI offers for a magnetic board's travel settings,
+   * in millimetres; absent on most records, and on every mechanical board. */
+  travel?: {
+    travel?: TravelRange;
+    firePress?: TravelRange;
+    fireLift?: TravelRange;
+    deadzone?: TravelRange;
+  } | null;
+  /** The vendor lets the owner declare a different switch model. */
+  switchReplaceable?: boolean;
+  /** The switch models the vendor's UI offers for this board, in its order.
+   * Empty on most boards; a dual-mode board lists mechanical. */
+  switchTypes?: SwitchType[];
+  /** An owner's read sweep from this board is on file. */
+  confirmed?: { issue: number; version: string } | null;
+  /** Built from the board's own answers because the registry has no entry
+   * for its id. The app says so and asks before the first write. */
+  unregistered?: boolean;
+  /** Firmware lineage that reads the lighting flags nibble the other way
+   * round; the backends encode and decode accordingly. */
+  ledFlagsSwapped?: boolean;
+  /** The backlight effects this board's firmware has, from the vendor's
+   * per-board table. Absent when the table has no entry. */
+  light?: LightLayout | null;
+}
+
+export interface LightEffect {
+  /** LEDPARAM mode byte. */
+  mode: number;
+  /** Highest speed offered; absent for effects with no motion. */
+  speedMax?: number | null;
+  /** Takes a colour; otherwise always rainbow. */
+  rgb?: boolean;
+  /** Direction or variant names by option index; null marks an index this
+   * board does not have. */
+  options?: (string | null)[] | null;
+}
+
+export interface LightLayout {
+  rgb: boolean;
+  brightnessMax: number;
+  effects: LightEffect[];
+}
+
+export interface ConnectedDevice {
+  path: string;
+  deviceId: number;
+  spec: DeviceSpec;
+  readOnly: boolean;
+  /** What the Switches page may do: read the columns, write them, or write
+   * the one board-wide record of a yc500 board below firmware 2.00. */
+  switches: SwitchAccess;
+  /** Firmware revision, e.g. 0x0200 for 2.00; null when unanswered. */
+  revision: number | null;
+  /** Cable, or the 2.4 GHz receiver's relay. Factory reset and display pictures need the cable. */
+  link: "usb" | "receiver";
+  /** Percent, receiver link only. */
+  battery: number | null;
+}
+
+export interface DiscoveredUnknown {
+  path: string;
+  productId: number;
+  product: string;
+  deviceId: number | null;
+}
+
+export type InputMonitoringStatus = "unknown" | "denied" | "granted";
+
+export interface ScanResult {
+  connected: ConnectedDevice | null;
+  unknown: DiscoveredUnknown[];
+  /** A keyboard is there but its node can't be opened; on Linux that is
+   * almost always a missing udev rule. */
+  openFailed: boolean;
+  inputMonitoring: InputMonitoringStatus | null;
+  /** Firmware stalled; nothing is retried until the board is replugged. */
+  stalled: boolean;
+  /** A receiver is paired but its keyboard is asleep or off. A key press
+   * wakes it; so does the cable. */
+  keyboardOffline: boolean;
+}
+
+export type SwitchAccess = "none" | "read" | "write" | "global";
+
+/** The owner's answers about their own board, from the check. Flags land on
+ * the spec only for a board the registry does not know; `switchWrites` is
+ * the owner's felt round trip and applies to any board whose columns read. */
+export interface OwnerRecord {
+  allowed: boolean;
+  magnetic: boolean;
+  sideLight: boolean | null;
+  switchWrites: boolean;
+  profiles: number | null;
+}
+
+/** One key's magnetic-switch settings, millimetres. */
+export interface KeySwitch {
+  slot: number;
+  /** Bits 0..6 of the mode byte: 0 plain, 2 dynamic keystroke, 3 mod-tap,
+   * 4 toggle, 5 repeating toggle, 7 snap. */
+  kind: number;
+  rapidTrigger: boolean;
+  travel: number;
+  lift: number;
+  rtPress: number;
+  rtLift: number;
+  deadBottom: number;
+  /** Dynamic keystroke: the first point; `travel` is the second. */
+  dksStart: number;
+  /** Dynamic keystroke: one byte per sub-layer, four 2-bit cells, one per travel event. */
+  dksActions: number[];
+  /** Mod-tap: milliseconds held before the hold action fires. */
+  mtTimeMs: number;
+  /** Snap: the partner's slot, 255 for none. */
+  snapPartner: number;
+  /** The switch model code; 0 where the board lists none. */
+  switchType: number;
+}
+
+export interface SwitchSettings {
+  format: "gen2" | "yc500";
+  unitMm: number;
+  keys: KeySwitch[];
+}
+
+export interface LedParam {
+  mode: number;
+  speed: number;
+  brightness: number;
+  option: number;
+  dazzle: boolean;
+  r: number;
+  g: number;
+  b: number;
+}
+
+export interface SleepTimes {
+  sleepBt: number;
+  sleep24: number;
+  deepBt: number;
+  deep24: number;
+}
+
+export interface KbOptions {
+  winLock: boolean;
+  wasdSwap: boolean;
+  ledOff: boolean;
+  sideLedOff: boolean;
+  macMode: boolean;
+}
+
+export interface SledParam {
+  mode: number;
+  speed: number;
+  brightness: number;
+  option: number;
+  dazzle: boolean;
+  r: number;
+  g: number;
+  b: number;
+}
+
+export interface DeviceSettings {
+  debounce: number;
+  sleep: SleepTimes;
+  /** null when the board's family has no decoded option bitfield. */
+  options: KbOptions | null;
+  revision: string;
+  autoOs: boolean;
+  autoOsSupported?: boolean;
+  sideLight: SledParam | null;
+}
+
+// Which vendor IDs to look for comes from the registry, not from a constant
+// here: most of these boards are ROYUAN's 0x3151, but a minority ship under
+// the brand's own ID and would otherwise never appear in the picker.
+let vendorIds: number[] | null = null;
+
+async function knownVendors(): Promise<number[]> {
+  await ensure();
+  if (!vendorIds) vendorIds = Array.from(core.vendor_ids());
+  return vendorIds;
+}
+
+let ready: Promise<void> | null = null;
+
+function ensure(): Promise<void> {
+  if (ready) return ready;
+  const started = init().then(() => {
+    // Cable pulled: invalidate the wasm session so scan reconnects.
+    navigator.hid.addEventListener("disconnect", () => core.drop_session());
+  });
+  ready = started;
+  return started;
+}
+
+export function hidAvailable(): boolean {
+  return "hid" in navigator && window.isSecureContext;
+}
+
+export async function requestInputMonitoring(): Promise<void> {
+  throw new Error("Enable Input Monitoring for your browser in System Settings.");
+}
+
+export const openInputMonitoringSettings = requestInputMonitoring;
+export async function revealCurrentApp(): Promise<void> {
+  throw new Error("Add your browser to Input Monitoring in System Settings.");
+}
+
+/** Devices this origin already holds permission for. */
+export async function grantedDevices(): Promise<HIDDevice[]> {
+  if (!hidAvailable()) return [];
+  const vendors = await knownVendors();
+  const all = await navigator.hid.getDevices();
+  return all.filter((d) => isSettingsCollection(d, vendors));
+}
+
+/** Shows the browser's device picker. Must run from a user gesture. */
+export async function requestDevice(): Promise<boolean> {
+  const vendors = await knownVendors();
+  const picked = await navigator.hid.requestDevice({
+    filters: requestFilters(vendors),
+  });
+  return picked.length > 0;
+}
+
+export const scan = async (): Promise<ScanResult> => {
+  const empty = {
+    connected: null,
+    unknown: [],
+    openFailed: false,
+    inputMonitoring: null,
+    stalled: false,
+    keyboardOffline: false,
+  };
+  if (!hidAvailable()) return empty;
+  await ensure();
+  const st = JSON.parse(core.status() as string) as {
+    connected: ConnectedDevice | null;
+    stalled: boolean;
+  };
+  if (st.connected) return { ...empty, connected: st.connected };
+
+  const devices = await grantedDevices();
+  if (st.stalled) {
+    // Opening a stalled device does not recover it. Wait for it to leave the
+    // bus, which is what a replug does; then scanning resumes.
+    if (devices.length === 0) {
+      core.clear_stall();
+    } else {
+      return { ...empty, stalled: true };
+    }
+  }
+
+  const unknown: DiscoveredUnknown[] = [];
+  let openFailed = false;
+  for (const d of devices) {
+    try {
+      const info = JSON.parse((await core.connect(d)) as string) as ConnectedDevice;
+      return { ...empty, connected: info };
+    } catch (e) {
+      let deviceId: number | null = null;
+      try {
+        const f = JSON.parse(String(e)) as { kind?: string; deviceId?: number };
+        if (f.kind === "stalled") return { ...empty, stalled: true };
+        if (f.kind === "keyboardOffline") return { ...empty, keyboardOffline: true };
+        if (f.kind === "openFailed") {
+          // Unopenable is not unknown: the board never got to speak.
+          openFailed = true;
+          continue;
+        }
+        deviceId = f.deviceId ?? null;
+      } catch {
+        // not a structured failure; fall through to an unknown row
+      }
+      unknown.push({
+        path: "webhid",
+        productId: d.productId,
+        product: d.productName,
+        deviceId,
+      });
+    }
+  }
+  return { ...empty, unknown, openFailed };
+};
+
+const withCore = async <T>(f: () => Promise<T>): Promise<T> => {
+  await ensure();
+  return f();
+};
+
+/** Version and commit of this build. */
+export const buildId = (): Promise<string> =>
+  withCore(async () => core.build_id());
+
+/** The owner allows writes to a board the registry does not know, this session. */
+export const allowUnregistered = (): Promise<void> =>
+  withCore(async () => {
+    core.allow_unregistered();
+  });
+/** What the owner established about this board in the check. Sends nothing;
+ * applied on every connect so the board keeps what the check unlocked. */
+export const applyOwnerRecord = (record: OwnerRecord): Promise<void> =>
+  withCore(async () => {
+    core.apply_owner_record(JSON.stringify(record));
+  });
+/** Open one slot's switch columns to the check's felt test, or close it. */
+export const setSwitchTrial = (slot: number | null): Promise<void> =>
+  withCore(async () => {
+    core.set_switch_trial(slot ?? undefined);
+  });
+
+// Live travel: once `0x1B 01` is sent the board streams input report 5 on
+// its vendor page. Which interface carries it differs by board, so every
+// granted collection of the board on that page is listened to.
+let travelDevices: HIDDevice[] = [];
+// A key held still sends nothing, so a slot keeps its last count until the
+// board reports it again.
+const travelLatest = new Uint16Array(128);
+const onTravelReport = (e: HIDInputReportEvent) => {
+  const d = e.data;
+  if (e.reportId !== 5 || d.byteLength < 4 || d.getUint8(0) !== 0x1b) return;
+  travelLatest[d.getUint8(3)] = d.getUint16(1, true);
+};
+export const travelStream = async (on: boolean): Promise<void> => {
+  await ensure();
+  for (const d of travelDevices) d.removeEventListener("inputreport", onTravelReport);
+  travelDevices = [];
+  travelLatest.fill(0);
+  if (!on) {
+    await core.travel_stream(false);
+    return;
+  }
+  const st = JSON.parse(core.status() as string) as { connected: ConnectedDevice | null };
+  const spec = st.connected?.spec;
+  if (!spec) throw new Error("no device connected");
+  for (const d of await navigator.hid.getDevices()) {
+    if (d.vendorId !== spec.vendorId || d.productId !== spec.productId) continue;
+    const carries = (c: HIDCollectionInfo): boolean =>
+      (c.usagePage === USAGE_PAGE && c.inputReports.some((r) => r.reportId === 5)) ||
+      c.children.some(carries);
+    if (!d.collections.some(carries)) continue;
+    if (!d.opened) await d.open();
+    d.addEventListener("inputreport", onTravelReport);
+    travelDevices.push(d);
+  }
+  if (travelDevices.length === 0) {
+    throw new Error("The browser was not given this board's travel reports. Add the keyboard again from the picker.");
+  }
+  await core.travel_stream(true);
+};
+export const travelRead = async (): Promise<number[]> => Array.from(travelLatest);
+
+export const getSwitches = (): Promise<SwitchSettings> =>
+  withCore(async () => JSON.parse((await core.get_switches()) as string) as SwitchSettings);
+export const setSwitchKey = (key: KeySwitch): Promise<void> =>
+  withCore(() => core.set_switch_key(JSON.stringify(key)));
+export const setSwitchKeys = (keys: KeySwitch[]): Promise<void> =>
+  withCore(() => core.set_switch_keys(JSON.stringify(keys)));
+export const setSwitchesAll = (key: KeySwitch, modes: number[], switchType?: number): Promise<void> =>
+  withCore(() => core.set_switches_all(JSON.stringify(key), new Uint8Array(modes), switchType));
+export const getSwitchPreset = (): Promise<number | null> =>
+  withCore(async () => (await core.get_switch_preset()) ?? null);
+export const setSwitchPreset = (preset: number): Promise<void> =>
+  withCore(() => core.set_switch_preset(preset));
+export const setSwitchesGlobal = (key: KeySwitch, all: boolean): Promise<void> =>
+  withCore(() => core.set_switches_global(JSON.stringify(key), all));
+export const readKeymapLayer = (profile: number, sublayer: number): Promise<number[]> =>
+  withCore(async () => Array.from(await core.read_keymap_layer(profile, sublayer)));
+export const setKeyLayer = (
+  profile: number,
+  sublayer: number,
+  slot: number,
+  value: number[],
+): Promise<boolean> =>
+  withCore(() => core.set_key_layer(profile, sublayer, slot, new Uint8Array(value), false));
+export const getSettings = (): Promise<DeviceSettings> =>
+  withCore(async () => JSON.parse((await core.get_settings()) as string));
+export const setDebounce = (value: number) => withCore(() => core.set_debounce(value));
+export const setSleep = (sleep: SleepTimes) =>
+  withCore(() => core.set_sleep(JSON.stringify(sleep)));
+export const setOptions = (options: KbOptions) =>
+  withCore(() => core.set_options(JSON.stringify(options)));
+export const setSideLight = (param: SledParam) =>
+  withCore(() => core.set_side_light(JSON.stringify(param)));
+export const setAutoOs = (enabled: boolean) => withCore(() => core.set_auto_os(enabled));
+export const factoryReset = () => withCore(() => core.factory_reset());
+export const writePerKey = (colors: number[], activate: boolean) =>
+  withCore(() => core.write_per_key(new Uint8Array(colors), activate));
+export const getLedParam = (): Promise<LedParam> =>
+  withCore(async () => JSON.parse((await core.get_led_param()) as string));
+export const setLedParam = (param: LedParam) =>
+  withCore(() => core.set_led_param(JSON.stringify(param)));
+/** Which way round this board reads the rainbow flag, from the owner. */
+export const setLedFlagsSwapped = (swapped: boolean): Promise<void> =>
+  withCore(async () => {
+    core.set_led_flags_swapped(swapped);
+  });
+export const getProfile = (): Promise<number> => withCore(() => core.get_profile());
+/** The display's firmware version, or null on a board without one. */
+export const getScreenVersion = (): Promise<number | null> =>
+  withCore(async () => (await core.get_screen_version()) ?? null);
+/** Set the display's clock to this computer's local time. */
+export const setClock = (d: Date): Promise<void> =>
+  withCore(() =>
+    core.set_clock(
+      d.getFullYear(),
+      d.getMonth() + 1,
+      d.getDate(),
+      d.getHours(),
+      d.getMinutes(),
+      d.getSeconds(),
+    ),
+  );
+/** Draw one still frame into a display slot, 0-based. `rgb` is w*h*3 bytes in row order. */
+export const writeScreenImage = (rgb: number[], slot: number): Promise<void> =>
+  withCore(() => core.write_screen_image(new Uint8Array(rgb), slot));
+export const setProfile = (profile: number) => withCore(() => core.set_profile(profile));
+export const readKeymap = (profile: number): Promise<number[]> =>
+  withCore(async () => Array.from(await core.read_keymap(profile)));
+export const readFnKeymap = (layer: number): Promise<number[]> =>
+  withCore(async () => Array.from(await core.read_fn_keymap(layer)));
+export const setKey = (
+  profile: number,
+  slot: number,
+  value: [number, number, number, number],
+  fnLayer: boolean,
+): Promise<boolean> => withCore(() => core.set_key(profile, slot, new Uint8Array(value), fnLayer));
+
+export type MacroEvent =
+  | { kind: "key"; usage: number; pressed: boolean; delayMs: number }
+  | { kind: "mouseButton"; button: number; pressed: boolean; delayMs: number }
+  | { kind: "mouseMove"; dx: number; dy: number; delayMs: number };
+
+export interface Macro {
+  repeat: number;
+  events: MacroEvent[];
+}
+
+export const readMacro = (slot: number): Promise<Macro> =>
+  withCore(async () => JSON.parse((await core.read_macro(slot)) as string));
+export const writeMacro = (slot: number, data: Macro) =>
+  withCore(() => core.write_macro(slot, JSON.stringify(data)));
+
+/** With `path`, bundles a granted board the registry does not know; WebHID
+ * paths are opaque, so the first granted device stands in for it. */
+export const contributionBundle = (path?: string): Promise<string> =>
+  withCore(async () => {
+    if (path === undefined) return (await core.contribution_bundle()) as string;
+    const [d] = await grantedDevices();
+    if (!d) throw "no keyboard connected";
+    return (await core.unknown_bundle(d)) as string;
+  });
+
+function download(name: string, text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+export const exportConfig = (path: string): Promise<string> =>
+  withCore(async () => {
+    const json = (await core.export_config()) as string;
+    const name = path.split(/[\\/]/).pop() || "sharkfin-config.json";
+    download(name, json);
+    const profiles = (JSON.parse(json) as { profiles: unknown[] }).profiles.length;
+    return `saved ${profiles} profiles to ${name}`;
+  });
+
+export const importConfig = (_path: string): Promise<string> =>
+  withCore(async () => {
+    const raw = takePicked();
+    if (raw === null) throw "no file was picked";
+    return (await core.import_config(raw)) as string;
+  });
+
+export const rawCommand = (
+  opcode: number,
+  payload: number[],
+  checksum: "bit7" | "bit8" | "none",
+): Promise<number[]> =>
+  withCore(async () =>
+    Array.from(await core.raw_command(opcode, new Uint8Array(payload), checksum)),
+  );

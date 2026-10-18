@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: Lint & test (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri system dependencies
+        run: |
+          # The runners' Azure mirror route stalls for hours at times
+          # (actions/runner-images#14823). Take packages from kernel.org,
+          # drop a transfer that goes quiet, and try again on failure.
+          printf 'https://mirrors.edge.kernel.org/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n' \
+            | sudo tee /etc/apt/apt-mirrors.txt
+          aptget() {
+            for i in 1 2 3; do
+              timeout 600 sudo apt-get -o Acquire::Retries=3 \
+                -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 "$@" && return
+            done
+            return 1
+          }
+          aptget update
+          aptget install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libayatana-appindicator3-dev libssl-dev libxdo-dev \
+            libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libudev-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            app/src-tauri
+            app/src-web
+
+      - name: Support list is current
+        run: |
+          python3 tools/coverage.py --markdown
+          git diff --exit-code docs/BOARDS.md
+
+      - name: Layout and registry lint
+        run: python3 tools/lint_layouts.py
+
+      - name: Frontend typecheck & build
+        working-directory: app
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run build
+
+      # Sourcemaps name every package that ends up in the bundle, which is
+      # what the notices file is generated from.
+      - name: Third-party notices are current
+        working-directory: app
+        run: |
+          npx vite build --sourcemap
+          python3 ../tools/notices.py --check
+
+      - name: Frontend unit tests
+        working-directory: app
+        run: npx vitest run
+
+      - name: Rust format
+        working-directory: app/src-tauri
+        run: cargo fmt --check
+
+      - name: Clippy (warnings are errors)
+        working-directory: app/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Unit tests
+        working-directory: app/src-tauri
+        run: cargo test --lib
+
+      - name: Install wasm toolchain
+        run: |
+          rustup target add wasm32-unknown-unknown
+          curl -sSL https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+
+      - name: Browser build format & lint
+        working-directory: app/src-web
+        run: |
+          cargo fmt --check
+          cargo clippy --target wasm32-unknown-unknown --all-targets -- -D warnings
+
+      # The wasm package is generated, not committed, so it has to exist
+      # before the frontend can be typechecked against it.
+      - name: Browser build
+        working-directory: app
+        run: |
+          npm run web:wasm
+          npx tsc -p tsconfig.web.json --noEmit
+          npx vite build --config vite.web.config.ts
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        # Linux stays on 22.04. The linker stamps symbol versions from the
+        # libc it links, and a binary linked on ubuntu-latest (24.04) will
+        # not start on Ubuntu 22.04 or Debian 12. Do not move it to latest.
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          # The runners' Azure mirror route stalls for hours at times
+          # (actions/runner-images#14823). Take packages from kernel.org,
+          # drop a transfer that goes quiet, and try again on failure.
+          printf 'https://mirrors.edge.kernel.org/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n' \
+            | sudo tee /etc/apt/apt-mirrors.txt
+          aptget() {
+            for i in 1 2 3; do
+              timeout 600 sudo apt-get -o Acquire::Retries=3 \
+                -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 "$@" && return
+            done
+            return 1
+          }
+          aptget update
+          aptget install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libayatana-appindicator3-dev libssl-dev libxdo-dev \
+            libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libudev-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # The cache key otherwise only says Linux, so a binary cached on
+      # ubuntu-latest is restored here and the build does not start.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+          prefix-key: ${{ matrix.os }}
+
+      - name: Build app (no bundling)
+        working-directory: app
+        run: |
+          npm ci
+          npx tauri build --no-bundle
+
+      - name: Binary stays on glibc 2.35
+        if: runner.os == 'Linux'
+        run: python3 tools/glibc_floor.py app/src-tauri/target/release/sharkfin

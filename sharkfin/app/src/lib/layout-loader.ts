@@ -1,0 +1,513 @@
+// SPDX-FileCopyrightText: JR Lanteigne <root@dnim.dev>
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Per-device board layouts. Vendor layouts share x86.json's schema and are
+// code-split; boards with no layout file get a plain 16×8 grid of the 128
+// matrix slots so they are still fully editable.
+import { useCallback, useEffect, useRef, useState } from "react";
+import x86 from "@/lib/layouts/x86.json";
+import { readKeymap, type ConnectedDevice } from "@/lib/backend";
+import {
+  agreement,
+  inferSlots,
+  rankCandidates,
+  type Inference,
+} from "@/lib/layout-infer";
+import { isoName, isoVariant, looksIso, resolvePicture } from "@/lib/iso";
+import { stubLayout } from "@/lib/layout-index";
+
+export interface LayoutKey {
+  code: string;
+  type: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text: string | null;
+  matrixIndex: number | null;
+  matrixEntry: number[] | null;
+  hidUsage: number | null;
+  consumerUsage: number | null;
+}
+
+export interface BoardLayout {
+  canvas: { width: number; height: number };
+  keys: LayoutKey[];
+  /** Synthesized slot grid; matrixEntry defaults are unknown. */
+  grid?: boolean;
+  /** Slots matched against the connected board, not vendor data. */
+  inferred?: boolean;
+  /** Derived from an ANSI layout by adding the keys only ISO boards have. */
+  iso?: boolean;
+}
+
+export interface BoardLayoutState {
+  layout: BoardLayout;
+  /** Still working out which picture this board gets. Until it settles,
+   *  `layout` is a placeholder and drawing it shows the wrong keyboard. */
+  resolving: boolean;
+  /** Inferred and not yet confirmed by the user; keymap writes stay gated. */
+  pending: boolean;
+  inference: Inference | null;
+  /** What a report carries once the owner has said no to every stored
+   *  picture: the last one refused, or the closest on a later connect.
+   *  Null while a picture is in play or the board was never rejected. */
+  rejected: Inference | null;
+  /** Candidate pictures left to try after the current one. */
+  remaining: number;
+  confirm: () => void;
+  reject: () => void;
+  /** Forget the stored answer and offer every stored picture that fits
+   *  this board, the registry's own suggestion first. This is the way out
+   *  for a board whose built-in picture is wrong, and for one that never
+   *  had a picture. */
+  sweep: () => void;
+  /** Match a pasted drawing against the board; returns the match rate and,
+   *  when it clears the bar, makes it the pending picture. */
+  tryCustom: (layout: BoardLayout) => Promise<number>;
+  /** Match a drawing without adopting it, for the editor's live feedback. */
+  previewCustom: (layout: BoardLayout) => Promise<Inference | null>;
+  /** The stored picture that came closest when none cleared the bar, as a
+   *  starting point for drawing the board. */
+  nearest: Inference | null;
+}
+
+const VENDOR = import.meta.glob("./layouts/vendor/*.json");
+const X86_NAME = "Common80_k72x86";
+// The registry's placeholder for a board with no layout data. A file of
+// that name exists but describes no particular board, so it is never
+// matched against a live keymap.
+const UNKNOWN_NAME = "Unknown";
+
+export const X86_LAYOUT = x86 as unknown as BoardLayout;
+
+const CELL = 41;
+
+// Extraction fills matrixIndex only when the vendor bundle carries a
+// defaultMatrix for the layout; many files have none. A key without a slot
+// cannot be rendered or edited, so such a layout is no better than no file.
+function usable(layout: BoardLayout | null): boolean {
+  return !!layout?.keys?.some?.((k) => k.matrixIndex !== null);
+}
+
+// Site data can be blocked or full; storage is a convenience here, never a
+// reason to fail. A throw from it used to leave the app resolving forever.
+function readStore(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStore(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Nothing to do: the choice simply is not remembered next time.
+  }
+}
+
+function clearStore(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // As above.
+  }
+}
+
+const confirmedKey = (id: number) => `sharkfin.layout-confirmed.${id}`;
+const rejectedKey = (id: number) => `sharkfin.layout-rejected.${id}`;
+const customKey = (id: number) => `sharkfin.layout-custom.${id}`;
+
+/** A picture needs at least this fraction of its keys tied to slots before
+ *  it is offered at all. */
+const MATCH_BAR = 0.9;
+/** How much better a rival assignment must fit before it displaces the
+ *  shipped one. This margin is the whole test: a board that merely ships
+ *  different factory functions matches the same slots either way, so no
+ *  rival gains ground, and a remapped board makes every assignment fit
+ *  worse rather than one better. It also means a layout the board already
+ *  agrees with cannot be displaced, since no score exceeds 1. */
+const RETHINK_MARGIN = 0.15;
+/** Distinct bodies offered before giving up on the collection. A body's
+ *  ISO derivation rides along with it and does not use up a place. */
+const MAX_CANDIDATES = 8;
+
+async function loadVendor(name: string): Promise<BoardLayout | null> {
+  const load = VENDOR[`./layouts/vendor/${name}.json`];
+  if (!load) return null;
+  try {
+    const m = (await load()) as { default?: BoardLayout };
+    return m.default ?? (m as BoardLayout);
+  } catch {
+    return null;
+  }
+}
+
+/** Best match for one geometry across every profile's keymap. */
+function bestMatch(
+  geometry: BoardLayout,
+  name: string,
+  matrices: number[][],
+): Inference | null {
+  let best: Inference | null = null;
+  for (let p = 0; p < matrices.length; p++) {
+    const inf = inferSlots(geometry, matrices[p]);
+    inf.profile = p;
+    inf.layoutName = name;
+    if (!best || inf.f1 > best.f1) best = inf;
+  }
+  return best;
+}
+
+export function gridLayout(): BoardLayout {
+  const keys: LayoutKey[] = Array.from({ length: 128 }, (_, i) => ({
+    code: `Slot${i}`,
+    type: "key",
+    x: (i % 16) * CELL + 1,
+    y: Math.floor(i / 16) * CELL + 1,
+    w: CELL - 1,
+    h: CELL - 1,
+    text: `${i}`,
+    matrixIndex: i,
+    matrixEntry: [0, 0, 0, 0],
+    hidUsage: null,
+    consumerUsage: null,
+  }));
+  return {
+    canvas: { width: 16 * CELL + 1, height: 8 * CELL + 1 },
+    keys,
+    grid: true,
+  };
+}
+
+export function useBoardLayout(device: ConnectedDevice | null): BoardLayoutState {
+  const name = device?.spec.keyLayout;
+  const id = device?.spec.id;
+  const profiles = device?.spec.profiles ?? 1;
+  const [layout, setLayout] = useState<BoardLayout>(X86_LAYOUT);
+  const [resolving, setResolving] = useState(true);
+  const [pending, setPending] = useState(false);
+  const [inference, setInference] = useState<Inference | null>(null);
+  const [rejected, setRejected] = useState<Inference | null>(null);
+  const [remaining, setRemaining] = useState(0);
+  const [nearest, setNearest] = useState<Inference | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const matricesRef = useRef<number[][]>([]);
+  const candidatesRef = useRef<Inference[]>([]);
+  const indexRef = useRef(0);
+  /** The shipped picture, when there is one to go back to. */
+  const fallbackRef = useRef<BoardLayout | null>(null);
+  /** Set by sweep(): skip the shipped picture and offer the collection. */
+  const forcedRef = useRef(false);
+
+  const readMatrices = useCallback(async () => {
+    if (matricesRef.current.length) return matricesRef.current;
+    const out: number[][] = [];
+    for (let p = 0; p < Math.max(1, profiles); p++) {
+      try {
+        out.push(await readKeymap(p));
+      } catch {
+        break;
+      }
+    }
+    matricesRef.current = out;
+    return out;
+  }, [profiles]);
+
+  useEffect(() => {
+    let live = true;
+    setResolving(true);
+    setPending(false);
+    setInference(null);
+    setRejected(null);
+    setRemaining(0);
+    setNearest(null);
+    matricesRef.current = [];
+    candidatesRef.current = [];
+    indexRef.current = 0;
+    fallbackRef.current = null;
+    if (!name || name === X86_NAME) {
+      setLayout(X86_LAYOUT);
+      setResolving(false);
+      return;
+    }
+    const forced = forcedRef.current;
+    forcedRef.current = false;
+    (async () => {
+      const named = name === UNKNOWN_NAME ? null : await loadVendor(name);
+      if (!live) return;
+      if (named && usable(named)) fallbackRef.current = named;
+      if (named && usable(named) && !forced) {
+        setLayout(named);
+        // An answer the owner already gave outranks the shipped file: a
+        // picture they drew, or one they picked from the collection. It is
+        // matched against the live keymap again rather than trusted, so a
+        // board whose keymap changed underneath falls back to the file.
+        const stored = id === undefined ? null : readStore(confirmedKey(id));
+        if (stored && stored !== "1" && stored !== name) {
+          const matrices = await readMatrices();
+          if (!live) return;
+          let geometry: BoardLayout | null = null;
+          if (stored === "kle") {
+            const raw = readStore(customKey(id!));
+            if (raw) geometry = JSON.parse(raw) as BoardLayout;
+          } else {
+            geometry = await resolvePicture(stored, loadVendor);
+          }
+          if (!live) return;
+          const inf = geometry && matrices.length ? bestMatch(geometry, stored, matrices) : null;
+          if (inf && inf.matchRate >= MATCH_BAR) {
+            setInference(inf);
+            setLayout(inf.layout);
+            setResolving(false);
+            return;
+          }
+        }
+        // Layout files are shared between boards, and boards sharing one
+        // do not always ship the same factory keymap, so the slots can be
+        // right for a sibling and wrong here. Keep them only while the
+        // board itself agrees; a board that fits a different assignment
+        // markedly better gets that one, and the user confirms it before
+        // anything is written. A board that fits neither has been
+        // remapped, which is not a reason to doubt the file.
+        //
+        // This settles before the picture is shown. Drawing the shipped
+        // one first would show the board a keyboard it then swaps out.
+        if (id !== undefined && !readStore(rejectedKey(id))) {
+          const matrices = await readMatrices();
+          if (!live) return;
+          if (matrices.length) {
+            const fit = Math.max(...matrices.map((m) => agreement(named, m)));
+            const offers: Inference[] = [];
+            const alt = bestMatch(named, name, matrices);
+            if (alt && alt.f1 >= fit + RETHINK_MARGIN && alt.matchRate >= MATCH_BAR) {
+              offers.push(alt);
+            }
+            // The ISO derivation of the shipped picture is not offered
+            // here. The keymap cannot say whether the board is ISO, and a
+            // picture the board already agrees with is not doubted on its
+            // account; an ISO owner reaches it through sweep(), where it
+            // sits behind the plain picture.
+            offers.sort((a, b) => b.f1 - a.f1);
+            // Only a confirmation of THIS picture counts. Treating any
+            // stored answer as a yes would adopt an unreviewed assignment
+            // on a board whose file changed under it.
+            const stored = readStore(confirmedKey(id));
+            const at = Math.max(
+              0,
+              offers.findIndex((o) => o.layoutName === stored),
+            );
+            if (offers.length) {
+              setInference(offers[at]);
+              setLayout(offers[at].layout);
+              candidatesRef.current = offers;
+              indexRef.current = at;
+              fallbackRef.current = named;
+              setRemaining(offers.length - at - 1);
+              setPending(offers[at].layoutName !== stored);
+            }
+          }
+        }
+        setResolving(false);
+        return;
+      }
+      // No slot data anywhere for this board, or the owner asked for the
+      // collection instead of the shipped picture. The board's own keymap
+      // is the only remaining source; trust nothing short of a near-total
+      // match, and a user who already said no keeps what they had. A
+      // remapped profile misses the bar, so every profile gets a try.
+      setLayout(fallbackRef.current ?? gridLayout());
+      setResolving(false);
+      if (id === undefined) return;
+      const refused = !!readStore(rejectedKey(id));
+      const matrices = await readMatrices();
+      if (!live || !matrices.length) return;
+
+      // A picture confirmed earlier is re-matched and used silently.
+      const stored = readStore(confirmedKey(id));
+      if (stored) {
+        let geometry: BoardLayout | null = null;
+        if (stored === "kle") {
+          const raw = readStore(customKey(id));
+          if (raw) geometry = JSON.parse(raw) as BoardLayout;
+        } else {
+          geometry = await resolvePicture(stored === "1" ? name : stored, loadVendor);
+        }
+        if (!live) return;
+        const inf = geometry
+          ? bestMatch(geometry, stored === "kle" ? "kle" : stored === "1" ? name : stored, matrices)
+          : null;
+        if (inf && inf.matchRate >= MATCH_BAR) {
+          setInference(inf);
+          setLayout(inf.layout);
+        }
+        return;
+      }
+
+      // Nothing confirmed yet: sweep the whole collection and offer the
+      // closest pictures, the registry's own suggestion first.
+      // An ISO board reports two keys no ANSI picture draws, and almost
+      // every shipped picture is ANSI. Rather than leave those keys
+      // undrawable until someone contributes a layout, derive the ISO
+      // version of each candidate that could be ISO. It is offered behind
+      // its plain picture, since the keymap alone cannot pick between them.
+      const wantsIso = matrices.some(looksIso);
+      // The digest scores like the pictures do, so only the ones worth
+      // offering are fetched; the rest of the collection stays on disk.
+      const { default: LAYOUT_INDEX } = await import("virtual:layout-index");
+      if (!live) return;
+      const wanted = new Set<string>();
+      let closestStem: string | null = null;
+      let closestF1 = -1;
+      for (const [stem, entries] of Object.entries(LAYOUT_INDEX.entries)) {
+        if (stem === UNKNOWN_NAME) continue;
+        const inf = bestMatch(stubLayout(entries), stem, matrices);
+        if (!inf) continue;
+        if (inf.matchRate >= MATCH_BAR) wanted.add(stem);
+        if (inf.f1 > closestF1) {
+          closestF1 = inf.f1;
+          closestStem = stem;
+        }
+        const born = LAYOUT_INDEX.iso[stem];
+        if (!wantsIso || !born) continue;
+        const isoInf = bestMatch(stubLayout(entries.concat(born)), isoName(stem), matrices);
+        if (isoInf && isoInf.matchRate >= MATCH_BAR) wanted.add(stem);
+      }
+      if (closestStem) wanted.add(closestStem);
+      const candidates: Inference[] = [];
+      let closest: Inference | null = null;
+      for (const stem of wanted) {
+        const geometry = await loadVendor(stem);
+        if (!live) return;
+        if (!geometry) continue;
+        const inf = bestMatch(geometry, stem, matrices);
+        if (inf && inf.matchRate >= MATCH_BAR) candidates.push(inf);
+        if (inf && (!closest || inf.f1 > closest.f1)) closest = inf;
+        if (!wantsIso) continue;
+        const iso = isoVariant(geometry);
+        if (!iso) continue;
+        const isoInf = bestMatch(iso, isoName(stem), matrices);
+        if (isoInf && isoInf.matchRate >= MATCH_BAR) candidates.push(isoInf);
+      }
+      // A picture that explains half the board is worth editing rather
+      // than drawing from a blank preset; anything less is a different
+      // board.
+      if (closest && closest.f1 >= 0.5) setNearest(closest);
+      // The owner already said no to everything: offer nothing, but keep
+      // what the board reports so the bundle can still carry it.
+      if (refused) {
+        setRejected(closest ?? inferSlots(gridLayout(), matrices[0]));
+        return;
+      }
+      const ranked = rankCandidates(candidates, name, MAX_CANDIDATES);
+      if (!ranked.length) return;
+      candidatesRef.current = ranked;
+      indexRef.current = 0;
+      setInference(ranked[0]);
+      setLayout(ranked[0].layout);
+      setRemaining(ranked.length - 1);
+      setPending(true);
+    })();
+    return () => {
+      live = false;
+    };
+    // A magnetic yc500 board addresses its keymap pages differently, so a
+    // change to that flag makes every cached read stale.
+  }, [name, id, readMatrices, attempt, device?.spec.magnetic]);
+
+  const confirm = useCallback(() => {
+    setInference((inf) => {
+      if (id !== undefined && inf) {
+        writeStore(confirmedKey(id), inf.layoutName || "1");
+        if (inf.layoutName === "kle")
+          writeStore(
+            customKey(id),
+            JSON.stringify({
+              canvas: inf.layout.canvas,
+              keys: inf.layout.keys.map((k) => ({ ...k, matrixIndex: null })),
+            }),
+          );
+      }
+      return inf;
+    });
+    setPending(false);
+  }, [id]);
+
+  const reject = useCallback(() => {
+    const next = indexRef.current + 1;
+    if (next < candidatesRef.current.length) {
+      indexRef.current = next;
+      const inf = candidatesRef.current[next];
+      setInference(inf);
+      setLayout(inf.layout);
+      setRemaining(candidatesRef.current.length - next - 1);
+      return;
+    }
+    if (id !== undefined) writeStore(rejectedKey(id), "1");
+    setRejected(candidatesRef.current[indexRef.current] ?? null);
+    setPending(false);
+    setRemaining(0);
+    setInference(null);
+    // Saying "wrong" to a rival assignment restores the shipped picture,
+    // which is still the best thing known about the board. Only a board
+    // that never had one falls back to the slot grid.
+    setLayout(fallbackRef.current ?? gridLayout());
+  }, [id]);
+
+  const sweep = useCallback(() => {
+    if (id !== undefined) {
+      clearStore(confirmedKey(id));
+      clearStore(rejectedKey(id));
+      clearStore(customKey(id));
+    }
+    matricesRef.current = [];
+    forcedRef.current = true;
+    setAttempt((n) => n + 1);
+  }, [id]);
+
+  const previewCustom = useCallback(
+    async (geometry: BoardLayout) => {
+      const matrices = await readMatrices();
+      if (!matrices.length) return null;
+      return bestMatch(geometry, "kle", matrices);
+    },
+    [readMatrices],
+  );
+
+  const tryCustom = useCallback(
+    async (geometry: BoardLayout) => {
+      const matrices = await readMatrices();
+      if (!matrices.length) return 0;
+      const inf = bestMatch(geometry, "kle", matrices);
+      if (!inf) return 0;
+      if (inf.matchRate >= MATCH_BAR) {
+        candidatesRef.current = [inf];
+        indexRef.current = 0;
+        setInference(inf);
+        setRejected(null);
+        setLayout(inf.layout);
+        setRemaining(0);
+        setPending(true);
+        if (id !== undefined) clearStore(rejectedKey(id));
+      }
+      return inf.matchRate;
+    },
+    [id, readMatrices],
+  );
+
+  return {
+    layout,
+    resolving,
+    pending,
+    inference,
+    rejected,
+    remaining,
+    confirm,
+    reject,
+    sweep,
+    tryCustom,
+    previewCustom,
+    nearest,
+  };
+}

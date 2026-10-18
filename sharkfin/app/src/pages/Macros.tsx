@@ -1,0 +1,442 @@
+// SPDX-FileCopyrightText: JR Lanteigne <root@dnim.dev>
+// SPDX-License-Identifier: GPL-3.0-or-later
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { noteWholeLayer } from "@/lib/wholeLayer";
+import { Circle, MousePointer2, Send, Square, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Chip, PageHeader, Section, Segmented, Strip } from "@/components/Page";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
+import Waiting from "@/components/Waiting";
+import KeyboardView from "@/components/KeyboardView";
+import { useBoardLayout } from "@/lib/layout-loader";
+import { useBoardProfile } from "@/lib/use-profile";
+import { CODE_TO_USAGE, entryLabel, usageLabel } from "@/lib/hid-usages";
+import {
+  readFnKeymap,
+  readKeymap,
+  readMacro,
+  setKey,
+  writeMacro,
+  type ConnectedDevice,
+  type MacroEvent,
+} from "@/lib/backend";
+
+const SLOTS = Array.from({ length: 50 }, (_, i) => i);
+const DIRECTIONS = [
+  ["left", -1, 0],
+  ["right", 1, 0],
+  ["up", 0, -1],
+  ["down", 0, 1],
+] as const;
+
+// Step size per event. The firmware sets how fast a held macro repeats, so
+// this is the only speed control available.
+const SPEEDS = [
+  { label: t("slow"), step: 2 },
+  { label: t("medium"), step: 5 },
+  { label: t("fast"), step: 12 },
+];
+
+const MODES = [
+  { value: 0, label: t("Repeat count") },
+  { value: 1, label: t("Toggle") },
+  { value: 2, label: t("While held") },
+];
+const MOUSE_LABELS = [
+  t("Mouse L"),
+  t("Mouse R"),
+  t("Mouse M"),
+  t("Mouse Back"),
+  t("Mouse Fwd"),
+];
+// JS button order is L, M, R; the protocol's is L, R, M.
+const JS_TO_PROTO_BUTTON = [0, 2, 1, 3, 4];
+
+function eventLabel(e: MacroEvent): string {
+  if (e.kind === "key") return `${usageLabel(e.usage)} ${e.pressed ? "↓" : "↑"}`;
+  if (e.kind === "mouseButton")
+    return `${MOUSE_LABELS[e.button] ?? t("Mouse ?")} ${e.pressed ? "↓" : "↑"}`;
+  return t("Move {dx},{dy}", { dx: e.dx, dy: e.dy });
+}
+
+export default function MacrosPage({ device }: { device: ConnectedDevice | null }) {
+  const connected = !!device;
+  const { layout, resolving, pending } = useBoardLayout(device);
+  const { profile, count: profileCount, select: selectProfile, switching } =
+    useBoardProfile(device);
+  const [slot, setSlot] = useState(0);
+  const [events, setEvents] = useState<MacroEvent[]>([]);
+  const [repeat, setRepeat] = useState(1);
+  const [recording, setRecording] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [layer, setLayer] = useState<"base" | "fn">("base");
+  const [dir, setDir] = useState<(typeof DIRECTIONS)[number][0]>("right");
+  const [speed, setSpeed] = useState(5);
+  const [mode, setMode] = useState(0);
+  const [entries, setEntries] = useState<Map<number, number[]> | null>(null);
+  const lastTs = useRef<number | null>(null);
+  const surface = useRef<HTMLDivElement>(null);
+
+
+  useEffect(() => {
+    if (!connected) return;
+    setEvents([]);
+    setRepeat(1);
+    setReading(true);
+    readMacro(slot)
+      .then((m) => {
+        setEvents(m.events);
+        setRepeat(Math.max(1, m.repeat));
+      })
+      .catch((e) => toast.error(t("Failed to read macro: {error}", { error: String(e) })))
+      .finally(() => setReading(false));
+  }, [connected, slot]);
+
+  useEffect(() => {
+    if (!connected) {
+      setEntries(null);
+      return;
+    }
+    (layer === "fn" ? readFnKeymap(profile) : readKeymap(profile))
+      .then((matrix) => {
+        const m = new Map<number, number[]>();
+        for (let s = 0; s < 128; s++) m.set(s, matrix.slice(s * 4, s * 4 + 4));
+        setEntries(m);
+      })
+      .catch(() => setEntries(null));
+  }, [connected, profile, layer]);
+
+  const record = useCallback((e: MacroEvent) => {
+    const now = performance.now();
+    setEvents((prev) => {
+      const next = [...prev];
+      if (next.length > 0 && lastTs.current !== null) {
+        const delta = Math.min(65535, Math.max(1, Math.round(now - lastTs.current)));
+        const last = next[next.length - 1];
+        if (last.kind !== "mouseMove") next[next.length - 1] = { ...last, delayMs: delta };
+      }
+      next.push(e);
+      return next;
+    });
+    lastTs.current = now;
+  }, []);
+
+  const startRecording = () => {
+    lastTs.current = null;
+    setRecording(true);
+    requestAnimationFrame(() => surface.current?.focus());
+  };
+
+  const onKey = (e: React.KeyboardEvent, pressed: boolean) => {
+    if (!recording || e.repeat) return;
+    e.preventDefault();
+    const usage = CODE_TO_USAGE[e.code];
+    if (usage === undefined) return;
+    record({ kind: "key", usage, pressed, delayMs: 10 });
+  };
+
+  const onMouse = (e: React.MouseEvent, pressed: boolean) => {
+    if (!recording) return;
+    e.preventDefault();
+    const button = JS_TO_PROTO_BUTTON[e.button];
+    if (button === undefined) return;
+    record({ kind: "mouseButton", button, pressed, delayMs: 10 });
+  };
+
+  const makeMouseKey = async () => {
+    const d = DIRECTIONS.find(([l]) => l === dir)!;
+    const next: MacroEvent[] = Array.from({ length: 4 }, () => ({
+      kind: "mouseMove",
+      dx: d[1] * speed,
+      dy: d[2] * speed,
+      delayMs: 8,
+    }));
+    setEvents(next);
+    setMode(2);
+    setBusy(true);
+    try {
+      await writeMacro(slot, { repeat: 1, events: next });
+      toast.success(t("Macro {slot} moves the cursor {dir}. Now click a key.", { slot: slot + 1, dir }));
+    } catch (e) {
+      toast.error(t("Send failed: {error}", { error: String(e) }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setDelay = (i: number, delayMs: number) =>
+    setEvents((prev) => prev.map((e, j) => (j === i ? { ...e, delayMs } : e)));
+
+  const send = async () => {
+    setBusy(true);
+    try {
+      await writeMacro(slot, { repeat, events });
+      toast.success(t("Macro {slot} sent", { slot: slot + 1 }));
+    } catch (e) {
+      toast.error(t("Send failed: {error}", { error: String(e) }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const bound = useMemo(() => {
+    const s = new Set<number>();
+    if (!entries) return s;
+    for (const [k, v] of entries) if (v[0] === 9 && v[2] === slot) s.add(k);
+    return s;
+  }, [entries, slot]);
+
+  const bind = async (matrixIndex: number, keyName: string) => {
+    setBusy(true);
+    try {
+      const value: [number, number, number, number] = [9, mode, slot, 0];
+      if (await setKey(profile, matrixIndex, value, layer === "fn")) noteWholeLayer();
+      setEntries((prev) => {
+        const next = new Map(prev);
+        next.set(matrixIndex, value);
+        return next;
+      });
+      toast.success(t("{key} → Macro {slot}", { key: keyName, slot: slot + 1 }));
+    } catch (e) {
+      toast.error(t("Bind failed: {error}", { error: String(e) }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!connected) {
+    return (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        {t("Connect your keyboard to edit macros.")}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-8 p-6">
+      <PageHeader
+        title={t("Macros")}
+        hint={t("Record a sequence, send it to one of the 50 onboard slots, then bind it to a key. Slots load straight from the keyboard.")}
+      >
+        <Select value={String(slot)} onValueChange={(v) => setSlot(Number(v))}>
+          <SelectTrigger size="sm" className="w-28">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SLOTS.map((s) => (
+              <SelectItem key={s} value={String(s)}>
+                {t("Slot {n}", { n: s + 1 })}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </PageHeader>
+
+      <Section
+        title={t("Sequence")}
+        hint={t(events.length === 1 ? "1 event" : "{n} events", { n: events.length })}
+        actions={
+          <>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              {t("Repeat")}
+              <Input
+                type="number"
+                min={1}
+                max={65535}
+                value={repeat}
+                onChange={(e) => setRepeat(Math.min(65535, Math.max(1, Number(e.target.value) || 1)))}
+                className="h-8 w-20"
+              />
+            </label>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={events.length === 0 || recording}
+              onClick={() => setEvents([])}
+            >
+              <Trash2 className="mr-1 h-3.5 w-3.5" /> {t("Clear")}
+            </Button>
+            {recording ? (
+              <Button size="sm" variant="destructive" onClick={() => setRecording(false)}>
+                <Square className="mr-1 h-3.5 w-3.5" /> {t("Stop")}
+              </Button>
+            ) : (
+              <Button size="sm" variant="ghost" onClick={startRecording}>
+                <Circle className="mr-1 h-3.5 w-3.5 fill-red-500 text-red-500" /> {t("Record")}
+              </Button>
+            )}
+            <Button size="sm" disabled={busy || recording || events.length === 0} onClick={send}>
+              <Send className="mr-1 h-3.5 w-3.5" /> {t("Send to keyboard")}
+            </Button>
+          </>
+        }
+      >
+        {recording && (
+          <div
+            ref={surface}
+            tabIndex={0}
+            onKeyDown={(e) => onKey(e, true)}
+            onKeyUp={(e) => onKey(e, false)}
+            onMouseDown={(e) => onMouse(e, true)}
+            onMouseUp={(e) => onMouse(e, false)}
+            onContextMenu={(e) => e.preventDefault()}
+            className="flex h-24 items-center justify-center rounded-xl bg-primary/10 text-sm outline-none ring-2 ring-(--ring) motion-safe:animate-in motion-safe:fade-in"
+          >
+            {t("Type or click here. Every press and release is captured.")}
+          </div>
+        )}
+
+        {reading && !recording ? (
+          <div className="py-6">
+            <Waiting label={t("Reading macro…")} />
+          </div>
+        ) : events.length === 0 && !recording ? (
+          <p className="py-4 text-sm text-muted-foreground">
+            {t("Empty. Hit Record to capture a sequence, or build a mouse key below.")}
+          </p>
+        ) : (
+          <ScrollArea className={cn(events.length > 8 && "h-64")}>
+            <div className="space-y-1 pr-3">
+              {events.map((e, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 rounded-md bg-muted/40 px-3 py-1.5 text-sm"
+                >
+                  <span className="w-6 text-right font-mono text-xs text-muted-foreground">
+                    {i + 1}
+                  </span>
+                  <span className="flex-1 font-mono">{eventLabel(e)}</span>
+                  <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                    {t("delay")}
+                    <Input
+                      type="number"
+                      min={0}
+                      max={e.kind === "mouseMove" ? 255 : 65535}
+                      value={e.delayMs}
+                      onChange={(ev) =>
+                        setDelay(i, Math.max(0, Number(ev.target.value) || 0))
+                      }
+                      className="h-7 w-20"
+                    />
+                    {t("ms")}
+                  </label>
+                  <button
+                    onClick={() => setEvents((prev) => prev.filter((_, j) => j !== i))}
+                    className="text-muted-foreground transition-colors hover:text-destructive"
+                    aria-label={t("Remove")}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+
+        <Strip className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">{t("Mouse key")}</span>
+          {DIRECTIONS.map(([label]) => (
+            <Chip key={label} on={dir === label} disabled={recording} onClick={() => setDir(label)} className="text-xs">
+              <MousePointer2 className="mr-1 inline h-3 w-3" />
+              {t(label)}
+            </Chip>
+          ))}
+          <Select value={String(speed)} onValueChange={(v) => setSpeed(Number(v))}>
+            <SelectTrigger size="sm" className="w-28">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SPEEDS.map((sp) => (
+                <SelectItem key={sp.step} value={String(sp.step)}>
+                  {sp.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button size="sm" variant="ghost" disabled={busy || recording} onClick={makeMouseKey}>
+            {t("Build and send")}
+          </Button>
+          <span className="w-full text-xs text-muted-foreground">
+            {t("Builds a macro that nudges the cursor, sends it to slot {slot}, and sets the binding to While held so it repeats. Then click a key below.", { slot: slot + 1 })}
+          </span>
+        </Strip>
+      </Section>
+
+      <Section
+        title={t("Bind macro {slot} to a key", { slot: slot + 1 })}
+        hint={
+          pending
+            ? t("This keyboard picture is not confirmed yet. Confirm it on the Keys page before binding macros.")
+            : t("Click a key to bind it. Keys already running this macro are dotted; unbind from the Keys page.")
+        }
+        actions={
+          <>
+            <Segmented
+              value={layer}
+              options={[
+                ["base", t("Base")],
+                ["fn", t("Fn layer")],
+              ]}
+              onChange={setLayer}
+            />
+            <Select value={String(mode)} onValueChange={(v) => setMode(Number(v))}>
+              <SelectTrigger size="sm" className="w-36">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MODES.map((m) => (
+                  <SelectItem key={m.value} value={String(m.value)}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {profileCount > 1 && (
+              <Select value={String(profile)} onValueChange={(v) => selectProfile(Number(v))}>
+                <SelectTrigger size="sm" className="w-28">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: profileCount }, (_, i) => i).map((p) => (
+                    <SelectItem key={p} value={String(p)}>
+                      {t("Profile {n}", { n: p + 1 })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </>
+        }
+      >
+        {!entries || resolving ? (
+          <div className="py-6">
+            <Waiting label={resolving ? t("Finding your keyboard…") : t("Reading keymap…")} />
+          </div>
+        ) : (
+          <KeyboardView
+            layout={layout}
+            selected={null}
+            entries={entries}
+            modified={bound}
+            labelFor={(k, entry) =>
+              entry ? entryLabel(entry, layer === "fn") : (k.text ?? k.code)
+            }
+            onSelect={(k) => !busy && !pending && !switching && bind(k.matrixIndex!, k.text ?? k.code)}
+          />
+        )}
+      </Section>
+    </div>
+  );
+}

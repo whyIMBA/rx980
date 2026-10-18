@@ -1,0 +1,2266 @@
+{
+ "vA": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 1
+   },
+   {
+    "mode": 2,
+    "speedMax": 3
+   },
+   {
+    "mode": 3,
+    "speedMax": 3
+   }
+  ]
+ },
+ "Xn": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   }
+  ]
+ },
+ "vp": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "vg": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 3,
+    "speedMax": 4
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   }
+  ]
+ },
+ "Kg": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 3,
+    "speedMax": 4
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   }
+  ]
+ },
+ "Pl": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "LA": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   }
+  ]
+ },
+ "xA": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "v": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left",
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Zigzag",
+     "Spiral"
+    ]
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Outward",
+     "Inward"
+    ]
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 12,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left"
+    ]
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "CCW",
+     "CW"
+    ]
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "Xi": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left",
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Zigzag",
+     "Spiral"
+    ]
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Outward",
+     "Inward"
+    ]
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 12,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left"
+    ]
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "CCW",
+     "CW"
+    ]
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "DA": {
+  "rgb": false,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left",
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Zigzag",
+     "Spiral"
+    ]
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Outward",
+     "Inward"
+    ]
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 12,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left"
+    ]
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "CCW",
+     "CW"
+    ]
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "AA": {
+  "rgb": false,
+  "brightnessMax": 9,
+  "effects": [
+   {
+    "mode": 1
+   }
+  ]
+ },
+ "He": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left",
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Zigzag",
+     "Spiral"
+    ]
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Outward",
+     "Inward"
+    ]
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 12,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left"
+    ]
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "CCW",
+     "CW"
+    ]
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "se": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left",
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Zigzag",
+     "Spiral"
+    ]
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Outward",
+     "Inward"
+    ]
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 12,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left"
+    ]
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "CCW",
+     "CW"
+    ]
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "xt": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 23,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Zigzag",
+     "Spiral"
+    ]
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   },
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     null,
+     null,
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Outward",
+     "Inward"
+    ]
+   },
+   {
+    "mode": 12,
+    "speedMax": 4
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "CCW",
+     "CW"
+    ]
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 24,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left"
+    ]
+   }
+  ]
+ },
+ "Cg": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 23,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Zigzag",
+     "Spiral"
+    ]
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   },
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left",
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Outward",
+     "Inward"
+    ]
+   },
+   {
+    "mode": 12,
+    "speedMax": 4
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "CCW",
+     "CW"
+    ]
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 24,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left"
+    ]
+   }
+  ]
+ },
+ "EA": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 23,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Zigzag",
+     "Spiral"
+    ]
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   },
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     null,
+     null,
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Outward",
+     "Inward"
+    ]
+   },
+   {
+    "mode": 12,
+    "speedMax": 4
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "CCW",
+     "CW"
+    ]
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 24,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left"
+    ]
+   }
+  ]
+ },
+ "a3": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left",
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Zigzag",
+     "Spiral"
+    ]
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Outward",
+     "Inward"
+    ]
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 12,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left"
+    ]
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "CCW",
+     "CW"
+    ]
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "Ud": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left",
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Zigzag",
+     "Spiral"
+    ]
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Outward",
+     "Inward"
+    ]
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 12,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left"
+    ]
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "CCW",
+     "CW"
+    ]
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "vr": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left",
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Zigzag",
+     "Spiral"
+    ]
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Outward",
+     "Inward"
+    ]
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 12,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left"
+    ]
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "CCW",
+     "CW"
+    ]
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "zd": {
+  "rgb": true,
+  "brightnessMax": 7,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 7,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left",
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 5,
+    "speedMax": 7,
+    "rgb": true
+   },
+   {
+    "mode": 6,
+    "speedMax": 7,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 7,
+    "rgb": true,
+    "options": [
+     "Zigzag",
+     "Spiral"
+    ]
+   },
+   {
+    "mode": 8,
+    "speedMax": 7,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 7,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 7,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 7,
+    "rgb": true,
+    "options": [
+     "Outward",
+     "Inward"
+    ]
+   },
+   {
+    "mode": 19,
+    "speedMax": 7,
+    "rgb": true
+   },
+   {
+    "mode": 12,
+    "speedMax": 7,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left"
+    ]
+   },
+   {
+    "mode": 14,
+    "speedMax": 7,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 7,
+    "rgb": true,
+    "options": [
+     "CCW",
+     "CW"
+    ]
+   },
+   {
+    "mode": 16,
+    "speedMax": 7,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 7,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 7,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 7,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 7
+   }
+  ]
+ },
+ "RA": {
+  "rgb": true,
+  "brightnessMax": 6,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true,
+    "options": [
+     "Right",
+     "Left",
+     "Down",
+     "Up"
+    ]
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 12,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "At": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 3
+   },
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   }
+  ]
+ },
+ "Y": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 3
+   }
+  ]
+ },
+ "Yi": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "Kp": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   },
+   {
+    "mode": 4,
+    "speedMax": 4
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true
+   }
+  ]
+ },
+ "w1": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "TA": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 3
+   }
+  ]
+ },
+ "vu": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 3
+   }
+  ]
+ },
+ "MA": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 3
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 3
+   }
+  ]
+ },
+ "IA": {
+  "rgb": true,
+  "brightnessMax": 5,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 5
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 5,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 5
+   }
+  ]
+ },
+ "Do": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   }
+  ]
+ },
+ "Jt": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   }
+  ]
+ },
+ "PA": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 3
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 3
+   }
+  ]
+ },
+ "FA": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4
+   },
+   {
+    "mode": 7,
+    "speedMax": 4
+   }
+  ]
+ },
+ "Br": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 3
+   }
+  ]
+ },
+ "Cp": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 3,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 3,
+    "rgb": true
+   }
+  ]
+ },
+ "Lg": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   }
+  ]
+ },
+ "NA": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 5,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 6,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 7,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 8,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 9,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 10,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 11,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 19,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 12,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 14,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 15,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 16,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 17,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 18,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4,
+    "rgb": true
+   }
+  ]
+ },
+ "BA": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   }
+  ]
+ },
+ "VA": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4,
+    "rgb": true
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   },
+   {
+    "mode": 2,
+    "speedMax": 4,
+    "rgb": true
+   }
+  ]
+ },
+ "OA": {
+  "rgb": true,
+  "brightnessMax": 4,
+  "effects": [
+   {
+    "mode": 4,
+    "speedMax": 4
+   },
+   {
+    "mode": 3,
+    "speedMax": 4
+   },
+   {
+    "mode": 1,
+    "rgb": true
+   }
+  ]
+ }
+}

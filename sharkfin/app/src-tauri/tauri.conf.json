@@ -1,0 +1,78 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "sharkfin",
+  "version": "0.10.0",
+  "identifier": "com.getsharkfin.sharkfin",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "sharkfin",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 1080,
+        "minHeight": 700,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "dniminenn",
+    "homepage": "https://github.com/dniminenn/sharkfin",
+    "copyright": "Copyright (C) 2026 dniminenn",
+    "license": "GPL-3.0-or-later",
+    "licenseFile": "../../LICENSE",
+    "shortDescription": "Configurator for Attack Shark / ROYUAN keyboards",
+    "resources": {
+      "../../LICENSE": "LICENSE",
+      "../../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md"
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": "-"
+    },
+    "linux": {
+      "appimage": {
+        "files": {
+          "/usr/share/metainfo/com.getsharkfin.sharkfin.metainfo.xml": "../../packaging/com.getsharkfin.sharkfin.metainfo.xml",
+          "/usr/share/metainfo/com.getsharkfin.sharkfin.appdata.xml": "../../packaging/com.getsharkfin.sharkfin.metainfo.xml"
+        }
+      },
+      "deb": {
+        "files": {
+          "/usr/lib/udev/rules.d/70-sharkfin.rules": "../../packaging/70-sharkfin.rules",
+          "/usr/share/doc/sharkfin/copyright": "../../LICENSE",
+          "/usr/share/doc/sharkfin/THIRD-PARTY-NOTICES.md": "../../THIRD-PARTY-NOTICES.md",
+          "/usr/share/metainfo/com.getsharkfin.sharkfin.metainfo.xml": "../../packaging/com.getsharkfin.sharkfin.metainfo.xml",
+          "/usr/share/metainfo/com.getsharkfin.sharkfin.appdata.xml": "../../packaging/com.getsharkfin.sharkfin.metainfo.xml"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/lib/udev/rules.d/70-sharkfin.rules": "../../packaging/70-sharkfin.rules",
+          "/usr/share/doc/sharkfin/copyright": "../../LICENSE",
+          "/usr/share/doc/sharkfin/THIRD-PARTY-NOTICES.md": "../../THIRD-PARTY-NOTICES.md",
+          "/usr/share/metainfo/com.getsharkfin.sharkfin.metainfo.xml": "../../packaging/com.getsharkfin.sharkfin.metainfo.xml",
+          "/usr/share/metainfo/com.getsharkfin.sharkfin.appdata.xml": "../../packaging/com.getsharkfin.sharkfin.metainfo.xml"
+        }
+      }
+    }
+  }
+}

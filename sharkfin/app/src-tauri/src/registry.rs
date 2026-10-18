@@ -1,0 +1,920 @@
+// SPDX-FileCopyrightText: JR Lanteigne <root@dnim.dev>
+// SPDX-FileCopyrightText: Shiroki Satsuki <me@shirok1.dev>
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Handshake device ID -> board spec, shipped as data.
+use std::sync::OnceLock;
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceFeatures {
+    #[serde(default)]
+    pub knob: Vec<String>,
+    #[serde(default)]
+    pub debounce: bool,
+    #[serde(default)]
+    pub sleep24: bool,
+    #[serde(default, rename = "sleepBT")]
+    pub sleep_bt: bool,
+    #[serde(default)]
+    pub magnetic_switches: bool,
+    #[serde(default)]
+    pub screen: bool,
+    /// Physical edge light. Firmware answers `0x88` regardless; this flag is
+    /// the only reliable signal.
+    #[serde(default)]
+    pub side_light: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceSpec {
+    pub id: u32,
+    pub name: String,
+    #[serde(default)]
+    pub display_name: String,
+    #[serde(default)]
+    pub company: String,
+    pub vendor: String,
+    pub vendor_id: u16,
+    pub product_id: u16,
+    pub internal_name: String,
+    pub key_layout: String,
+    pub light_layout: String,
+    #[serde(default)]
+    pub side_light_layout: String,
+    pub profiles: u8,
+    #[serde(default)]
+    pub magnetic: bool,
+    #[serde(default = "family_unknown")]
+    pub family: String,
+    /// This board's firmware has no single-slot key write (`0x13`, `0x15`):
+    /// the dispatcher drops them. Key writes go through the whole-layer
+    /// `0x09`/`0x10` upload instead, which lands in flash. yc500 only; on a
+    /// board whose family is still unknown it waits for the family to settle.
+    #[serde(default)]
+    pub bulk_keymap: bool,
+    /// Display size and pixel format. 128x128, 160x80, 240x135 and 320x172
+    /// all ship; nothing may assume a default.
+    #[serde(default)]
+    pub screen: Option<ScreenSpec>,
+    /// Vendor travel ranges, millimetres. Most magnetic records carry none;
+    /// the driver then keys defaults on firmware revision, read at connect.
+    #[serde(default)]
+    pub travel: Option<TravelSpec>,
+    #[serde(default)]
+    pub switch_replaceable: bool,
+    /// The switch models the vendor's UI offers for this board, in its
+    /// order. Empty on most boards; a dual-mode board lists mechanical.
+    #[serde(default)]
+    pub switch_types: Vec<SwitchType>,
+    pub features: DeviceFeatures,
+    /// Built from the board's own answers (`derive.rs`). Never true for a
+    /// shipped entry. The app asks before the first write.
+    #[serde(default)]
+    pub unregistered: bool,
+    /// Absent: the common set.
+    #[serde(default, skip_deserializing)]
+    pub light: Option<LightLayoutSpec>,
+    /// This board reads the LEDPARAM flags nibble the other way round: 8 is
+    /// a fixed colour and 7 is the rainbow, and the seven preset colours
+    /// differ. An explicit true in a hand-added record is hardware evidence.
+    /// Otherwise read out of each board's own
+    /// firmware into `data/led-flags.json` by `tools/led_flags.py`, else
+    /// out of the vendor driver's class for the board into
+    /// `data/led-flags.vendor.json` by `tools/vendor_led_flags.py`, and
+    /// attached here at load. The owner can say otherwise from the Lighting
+    /// page, which overrides this for the open board
+    /// (`set_led_flags_swapped`). Most boards keep 7 fixed, 8 rainbow
+    /// (docs/PROTOCOL.md).
+    #[serde(default)]
+    pub led_flags_swapped: bool,
+    /// "hardware", "firmware", "vendor driver", or empty for the default.
+    #[serde(default, skip_deserializing)]
+    pub led_flags_source: &'static str,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenSpec {
+    pub w: u16,
+    pub h: u16,
+    /// `16` is RGB565, `24` is three bytes a pixel.
+    pub mode: String,
+    #[serde(default)]
+    pub layers: u8,
+}
+
+/// `None` is omitted, not zero.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TravelRange {
+    #[serde(default)]
+    pub min: Option<f64>,
+    #[serde(default)]
+    pub max: Option<f64>,
+    #[serde(default)]
+    pub step: Option<f64>,
+    #[serde(default)]
+    pub default: Option<f64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LightEffectSpec {
+    pub mode: u8,
+    /// Highest speed the vendor offers; absent for effects with no motion.
+    #[serde(default)]
+    pub speed_max: Option<u8>,
+    /// Takes a colour; effects without this are always rainbow.
+    #[serde(default)]
+    pub rgb: bool,
+    /// Direction or variant names by option index; a null keeps the index
+    /// and marks a direction this board does not have.
+    #[serde(default)]
+    pub options: Option<Vec<Option<String>>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LightLayoutSpec {
+    pub rgb: bool,
+    pub brightness_max: u8,
+    pub effects: Vec<LightEffectSpec>,
+}
+
+/// One switch model: the byte magnetic sub-op 252 takes and the vendor's
+/// English for it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SwitchType {
+    pub code: u8,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TravelSpec {
+    #[serde(default)]
+    pub travel: Option<TravelRange>,
+    #[serde(default)]
+    pub fire_press: Option<TravelRange>,
+    /// Rapid trigger release sensitivity.
+    #[serde(default)]
+    pub fire_lift: Option<TravelRange>,
+    /// Bottom dead zone.
+    #[serde(default)]
+    pub deadzone: Option<TravelRange>,
+}
+
+fn family_unknown() -> String {
+    "unknown".into()
+}
+
+/// Families whose command set is established. Anything else is read-only:
+/// the two families' opcodes collide and a misaddressed write is live.
+const KNOWN_FAMILIES: &[&str] = &["yc500", "gen2"];
+
+impl DeviceSpec {
+    /// What a human calls this board.
+    pub fn label(&self) -> String {
+        let name = if self.display_name.is_empty() {
+            &self.name
+        } else {
+            &self.display_name
+        };
+        let brand = if self.company.is_empty() {
+            &self.vendor
+        } else {
+            &self.company
+        };
+        if brand.is_empty() {
+            name.clone()
+        } else {
+            format!("{brand} {name}")
+        }
+    }
+
+    /// How this board reads a LEDPARAM packet: the flags-nibble lineage, the
+    /// family's speed range and the light table's brightness range.
+    pub fn led_wire(&self) -> crate::protocol::LedWire {
+        crate::protocol::LedWire {
+            swapped: self.led_flags_swapped,
+            speed_max: if self.family == "gen2" { 4 } else { 5 },
+            brightness_max: self
+                .light
+                .as_ref()
+                .map(|l| l.brightness_max)
+                .unwrap_or(4)
+                .max(1),
+        }
+    }
+
+    pub fn writes_supported(&self) -> bool {
+        KNOWN_FAMILIES.contains(&self.family.as_str())
+    }
+
+    /// The first yc500 firmware with per-key switch columns. The vendor's
+    /// driver gates on the same number; the K85 at 1.07 has no `0x65` at
+    /// all, the ER75 at 2.00 has the columns.
+    pub const YC500_HALL_REVISION: u16 = 0x0200;
+
+    /// Whether the magnetic-switch settings can be read: a magnetic gen2
+    /// board, or a magnetic yc500 board whose firmware is 2.00 or later.
+    /// The read is a raw page copy with no side effects. `revision` is the
+    /// `0x80` reply as a u16, None when the board did not answer.
+    pub fn hall_reads(&self, revision: Option<u16>) -> bool {
+        self.magnetic
+            && match self.family.as_str() {
+                "gen2" => true,
+                "yc500" => revision.is_some_and(|r| r >= Self::YC500_HALL_REVISION),
+                _ => false,
+            }
+    }
+
+    /// Whether they can be written: the lineages whose handler and save
+    /// path were read out of their own images (ry5088 on gen2, three
+    /// images; yc3121 on yc500, the ER75's 2.00 image). The other gen2
+    /// lineages share the family, not the evidence.
+    pub fn hall_writes(&self, revision: Option<u16>) -> bool {
+        self.hall_reads(revision)
+            && match self.family.as_str() {
+                "gen2" => self.internal_name.starts_with("ry5088_"),
+                "yc500" => self.internal_name.starts_with("yc3121_"),
+                _ => false,
+            }
+    }
+
+    /// Whether `code` is a switch model the vendor offers for this board.
+    /// The column is written only with a listed code: an unlisted one is
+    /// what the firmware reports before any is set, and goes back as is.
+    pub fn lists_switch_type(&self, code: u8) -> bool {
+        self.switch_types.iter().any(|t| t.code == code)
+    }
+
+    /// A yc500 magnetic board below 2.00 keeps one board-wide record
+    /// (`0x1A`) instead of columns. Read out of the K85's 1.07 image; the
+    /// ER75's 2.00 image has the same handler beside its columns.
+    pub fn hall_global(&self, revision: Option<u16>) -> bool {
+        self.magnetic
+            && self.family == "yc500"
+            && self.internal_name.starts_with("yc3121_")
+            && revision.is_some_and(|r| r < Self::YC500_HALL_REVISION)
+    }
+
+    /// What drawing is allowed on this board's display, or `None` when the
+    /// path is not evidenced. The board's own firmware must be known to
+    /// parse frames itself; most gen2 boards instead hand the request to a
+    /// display chip whose protocol is not established, and stay refused.
+    ///
+    /// Three lineages qualify (docs/PROTOCOL.md, "Screens"):
+    ///
+    /// - The yc500 family. Its images read the frame length as a u16 and
+    ///   never the high bytes, so frames past 65535 bytes are refused.
+    ///   Modes 16 and 24 each have a firmware image behind them.
+    /// - yc3123-lineage gen2 boards, named by the `internalName` prefix.
+    ///   Their images read the length as a u32 and stream through banked
+    ///   RAM, so the big panels fit. Mode 16 only; no yc3123 image
+    ///   evidences mode 24.
+    /// - ry5088-lineage gen2 boards. These hand the frame to a display
+    ///   chip, but that chip's own firmware parses the layout sharkfin
+    ///   already builds, and the keyboard forwards only the packet's first
+    ///   twelve bytes, so the length is a u16 there too. Mode 16 only; the
+    ///   gen2 dispatcher has no mode 24 opcode at all.
+    ///
+    /// The remaining gen2 lineages (ry6602, ry6609, pan1086) sit in the
+    /// same family and are refused: only ry5088 keyboard firmware was
+    /// disassembled, and a shared family is not evidence.
+    pub fn screen_draw(&self) -> Option<ScreenDrawRules> {
+        match self.family.as_str() {
+            "yc500" => Some(ScreenDrawRules {
+                max_frame: usize::from(u16::MAX),
+                max_dim: 255,
+                mode24: true,
+            }),
+            "gen2" if self.internal_name.starts_with("yc3123_") => Some(ScreenDrawRules {
+                max_frame: u32::MAX as usize,
+                max_dim: u16::MAX,
+                mode24: false,
+            }),
+            "gen2" if self.internal_name.starts_with("ry5088_") => Some(ScreenDrawRules {
+                max_frame: usize::from(u16::MAX),
+                max_dim: 255,
+                mode24: false,
+            }),
+            _ => None,
+        }
+    }
+}
+
+/// Limits `screen_draw` grants: max frame the firmware can count, max panel
+/// the bounding box can address, and whether mode 24 is evidenced.
+///
+/// `max_dim` is not cosmetic. yc500 and ry5088 read the box from its low
+/// bytes and subtract; a 320-wide panel arrives as width 64. yc3123 reads
+/// the high bytes and has no such limit.
+pub struct ScreenDrawRules {
+    pub max_frame: usize,
+    pub max_dim: u16,
+    pub mode24: bool,
+}
+
+/// What a data bundle calls this build. Version alone is not enough: the
+/// browser app deploys from master. `SHARKFIN_COMMIT` comes from the build
+/// script and is absent in a release tarball.
+pub fn build_id() -> String {
+    match option_env!("SHARKFIN_COMMIT") {
+        Some(commit) => format!("{} ({commit})", env!("CARGO_PKG_VERSION")),
+        None => env!("CARGO_PKG_VERSION").to_string(),
+    }
+}
+
+static DEVICES_JSON: &str = include_str!("../data/devices.json");
+static LIGHT_LAYOUTS_JSON: &str = include_str!("../data/light-layouts.json");
+static LED_FLAGS_JSON: &str = include_str!("../data/led-flags.json");
+static LED_FLAGS_VENDOR_JSON: &str = include_str!("../data/led-flags.vendor.json");
+
+/// One board's LEDPARAM flags reading. `rainbow` is the nibble that paints
+/// the rainbow: 8 on most boards, 7 on the rest.
+#[derive(Deserialize)]
+struct LedFlagRecord {
+    rainbow: u8,
+}
+
+fn led_flag_records(json: &str, file: &str) -> std::collections::HashMap<String, LedFlagRecord> {
+    match serde_json::from_str(json) {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!("data/{file} failed to parse: {e}");
+            Default::default()
+        }
+    }
+}
+
+/// The bundle's line on how this board's flags nibble is read: the two
+/// values, the evidence, and the owner's override when there is one.
+pub fn led_flags_note(spec: &DeviceSpec, owner: Option<bool>) -> String {
+    let swapped = owner.unwrap_or(spec.led_flags_swapped);
+    let pair = if swapped {
+        "7 rainbow, 8 fixed"
+    } else {
+        "7 fixed, 8 rainbow"
+    };
+    let source = if spec.led_flags_source.is_empty() {
+        "default"
+    } else {
+        spec.led_flags_source
+    };
+    match owner {
+        Some(o) if o != spec.led_flags_swapped => {
+            format!("{pair} (owner swapped; {source} says otherwise)")
+        }
+        _ => format!("{pair} ({source})"),
+    }
+}
+
+/// A malformed registry must not take the app down. Callers treat the board
+/// as unknown.
+pub fn all() -> Vec<DeviceSpec> {
+    let mut devices: Vec<DeviceSpec> = match serde_json::from_str(DEVICES_JSON) {
+        Ok(v) => v,
+        Err(e) => {
+            log::error!("data/devices.json failed to parse: {e}");
+            return Vec::new();
+        }
+    };
+    let lights: std::collections::HashMap<String, LightLayoutSpec> =
+        match serde_json::from_str(LIGHT_LAYOUTS_JSON) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("data/light-layouts.json failed to parse: {e}");
+                Default::default()
+            }
+        };
+    let firmware = led_flag_records(LED_FLAGS_JSON, "led-flags.json");
+    let vendor = led_flag_records(LED_FLAGS_VENDOR_JSON, "led-flags.vendor.json");
+    for d in &mut devices {
+        d.light = lights.get(&d.light_layout).cloned();
+        let id = d.id.to_string();
+        let (swapped, source) = if d.led_flags_swapped {
+            (true, "hardware")
+        } else {
+            match (firmware.get(&id), vendor.get(&id)) {
+                (Some(r), _) => (r.rainbow == FLAGS_SWAPPED_RAINBOW, "firmware"),
+                (None, Some(r)) => (r.rainbow == FLAGS_SWAPPED_RAINBOW, "vendor driver"),
+                (None, None) => (false, ""),
+            }
+        };
+        d.led_flags_swapped = swapped;
+        d.led_flags_source = source;
+    }
+    devices
+}
+
+/// The flags nibble that paints the rainbow on the boards that read it the
+/// other way round.
+const FLAGS_SWAPPED_RAINBOW: u8 = 7;
+
+pub fn by_id(id: u32) -> Option<DeviceSpec> {
+    all().into_iter().find(|d| d.id == id)
+}
+
+/// Every USB vendor ID in the registry. Most boards are 0x3151; a minority
+/// ship under the brand's own ID. Derived from the registry so the two
+/// cannot disagree.
+pub fn vendor_ids() -> &'static [u16] {
+    static IDS: OnceLock<Vec<u16>> = OnceLock::new();
+    IDS.get_or_init(|| {
+        let mut v: Vec<u16> = all().iter().map(|d| d.vendor_id).collect();
+        v.sort_unstable();
+        v.dedup();
+        v
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn akko_3098b_matches_the_hardware_report() {
+        let d = by_id(69).expect("3098B present");
+        assert_eq!(d.label(), "Akko 3098B");
+        assert_eq!((d.vendor_id, d.product_id), (0x3151, 0x4002));
+        assert_eq!(d.family, "yc500");
+        assert_eq!(d.profiles, 4);
+        assert!(d.bulk_keymap);
+        assert!(!d.unregistered);
+        assert_eq!(d.key_layout, "Local98_Akko_3098B");
+        assert!(d.led_wire().swapped);
+        assert_eq!(d.led_flags_source, "hardware");
+        let mut led = crate::protocol::LedParam::from_reply_for(
+            &[0x87, 10, 3, 4, 7, 255, 0, 0],
+            d.led_wire(),
+        )
+        .unwrap();
+        assert!(led.dazzle, "the owner's red test produced a rainbow");
+        assert_eq!(led.to_packet_for(d.led_wire())[4] & 15, 7);
+        led.dazzle = false;
+        assert_eq!(led.to_packet_for(d.led_wire())[4] & 15, 8);
+        assert!(!d.magnetic && !d.features.side_light && !d.features.screen);
+        assert!(!d.features.debounce && !d.features.sleep24 && !d.features.sleep_bt);
+    }
+
+    #[test]
+    fn akko_3098b_layout_has_fixed_slots() {
+        let layout: serde_json::Value = serde_json::from_str(include_str!(
+            "../../src/lib/layouts/vendor/Local98_Akko_3098B.json"
+        ))
+        .unwrap();
+        let keys = layout["keys"].as_array().unwrap();
+        assert_eq!(keys.len(), 98);
+        let slots: std::collections::HashSet<_> = keys
+            .iter()
+            .map(|k| k["matrixIndex"].as_u64().unwrap())
+            .collect();
+        assert_eq!(slots.len(), 98);
+        for (code, slot) in [
+            ("Escape", 0),
+            ("ControlLeft", 5),
+            ("NumLock", 85),
+            ("NumpadDecimal", 101),
+        ] {
+            let key = keys.iter().find(|k| k["code"] == code).unwrap();
+            assert_eq!(key["matrixIndex"], slot);
+        }
+    }
+
+    #[test]
+    fn devices_json_parses() {
+        let devices = all();
+        assert!(devices.len() > 500);
+        let x86 = by_id(1967).expect("X86 present");
+        assert_eq!(x86.internal_name, "yc3121_x86_soc");
+        assert_eq!(x86.family, "yc500");
+        assert_eq!(x86.key_layout, "Common80_k72x86");
+        assert_eq!(x86.profiles, 3);
+        assert!(!x86.magnetic);
+        assert!(
+            !x86.features.side_light,
+            "the X86 has no edge light; the firmware answering 0x88 is not evidence"
+        );
+        assert!(x86.writes_supported());
+        assert_eq!(x86.label(), "AttackShark X86");
+    }
+
+    /// The write gate is per family and lineage together. A `yc3121_` name
+    /// on a gen2 board (the JEDEL KL166, issue #41) is not the yc500 lineage
+    /// whose image was read, and 0.7.1 let it through.
+    #[test]
+    fn switch_writes_need_the_lineage_in_its_own_family() {
+        let kl166 = by_id(2729).expect("KL166 present");
+        assert_eq!(kl166.family, "gen2");
+        assert!(kl166.internal_name.starts_with("yc3121_"));
+        assert!(kl166.hall_reads(Some(0x0300)));
+        assert!(!kl166.hall_writes(Some(0x0300)));
+        let er75 = by_id(1618).expect("ER75 present");
+        assert!(er75.hall_writes(Some(0x0200)));
+        assert!(!er75.hall_writes(Some(0x0107)));
+        assert!(!er75.hall_reads(None));
+        let x65 = all()
+            .into_iter()
+            .find(|d| d.id == 2268)
+            .expect("X65HE present");
+        assert!(x65.hall_writes(None));
+    }
+
+    /// The vendor's light table names every layout the registry uses, bar
+    /// one board whose name the bundle no longer defines; a board with a
+    /// name and no table silently gets the common set.
+    #[test]
+    fn light_layouts_cover_the_registry() {
+        let x86 = by_id(1967).expect("X86 present");
+        let light = x86.light.expect("X86 has a light table");
+        assert_eq!(light.effects.len(), 18);
+        assert!(light
+            .effects
+            .iter()
+            .any(|e| e.mode == 4 && e.options.as_ref().is_some_and(|o| o.len() == 4)));
+        let m3 = by_id(2585).expect("M3 V5 present");
+        let light = m3.light.expect("M3 V5 has a light table");
+        assert!(light.effects.iter().any(|e| e.mode == 23));
+        assert!(light.effects.iter().any(|e| e.mode == 24));
+        let missing: Vec<u32> = all()
+            .iter()
+            .filter(|d| !d.light_layout.is_empty() && d.light.is_none())
+            .map(|d| d.id)
+            .collect();
+        assert_eq!(
+            missing,
+            vec![2872],
+            "boards named to a layout the table lacks"
+        );
+    }
+
+    /// The flags nibble comes from each board's own firmware, not from the
+    /// record. Both boards whose owners reported an inverted rainbow toggle
+    /// are in the file; the X86, whose lineage reads 8 as the rainbow, is
+    /// not. Boards the scan could not read take the vendor driver's
+    /// constant: the FUN60 PRO (2600, issue #49) has no published firmware
+    /// and its driver class sends 7 for the rainbow. The X65HE (2268) is the
+    /// one board where the two disagree, and the firmware wins.
+    #[test]
+    fn led_flags_come_from_the_firmware_scan() {
+        for id in [606, 1308, 2268] {
+            let d = by_id(id).unwrap_or_else(|| panic!("device {id} present"));
+            assert!(d.led_flags_swapped, "device {id} reads 7 as the rainbow");
+            assert_eq!(d.led_flags_source, "firmware");
+            assert!(d.led_wire().swapped);
+        }
+        let fun60 = by_id(2600).expect("FUN60 PRO present");
+        assert!(fun60.led_flags_swapped);
+        assert_eq!(fun60.led_flags_source, "vendor driver");
+        let x86 = by_id(1967).expect("X86 present");
+        assert!(
+            !x86.led_flags_swapped,
+            "the X86 lineage reads 8 as the rainbow"
+        );
+        assert!(!x86.led_wire().swapped);
+        let firmware = all()
+            .iter()
+            .filter(|d| d.led_flags_swapped && d.led_flags_source == "firmware")
+            .count();
+        assert_eq!(firmware, 33, "boards the scan read as 7 = rainbow");
+        let swapped = all().iter().filter(|d| d.led_flags_swapped).count();
+        assert_eq!(
+            swapped, 140,
+            "with hardware reports and the driver's verdict where there is no firmware"
+        );
+    }
+
+    /// Drawing is granted per lineage, never per family alone. yc3123 boards
+    /// live in gen2 beside ry5088 boards that forward frames to a display
+    /// chip, so the prefix test is what keeps those refused.
+    #[test]
+    fn screen_draw_follows_the_lineage() {
+        let rt85 = by_id(2895).expect("RT85 present");
+        assert_eq!(rt85.family, "gen2");
+        assert!(rt85.internal_name.starts_with("yc3123_"));
+        let rules = rt85.screen_draw().expect("yc3123 draws");
+        let screen = rt85.screen.expect("RT85 has a screen");
+        // 320x172 RGB565 is 110080 bytes: over the u16, within the u32.
+        assert!(usize::from(screen.w) * usize::from(screen.h) * 2 <= rules.max_frame);
+        assert!(!rules.mode24, "mode 24 has no yc3123 image behind it");
+
+        let rt100 = by_id(1379).expect("RT100 present");
+        assert_eq!(rt100.family, "yc500");
+        let rules = rt100.screen_draw().expect("yc500 draws");
+        assert_eq!(rules.max_frame, usize::from(u16::MAX));
+        assert!(rules.mode24);
+
+        // The k2401e is yc3121-lineage with a 121552-byte panel and no
+        // published firmware; its frame must still exceed the u16 limit.
+        let k2401e = by_id(3430).expect("k2401e present");
+        assert_eq!(k2401e.family, "yc500");
+        let rules = k2401e.screen_draw().expect("family gate passes");
+        let screen = k2401e.screen.expect("k2401e has a screen");
+        assert!(usize::from(screen.w) * usize::from(screen.h) * 2 > rules.max_frame);
+
+        // The ry5088 display chip parses the same layout, evidenced from
+        // its own firmware, but reads the box as low bytes only.
+        let nj81 = by_id(2454).expect("NJ81-CP present");
+        assert_eq!(nj81.family, "gen2");
+        let rules = nj81.screen_draw().expect("ry5088 draws");
+        assert_eq!(rules.max_frame, usize::from(u16::MAX));
+        assert_eq!(rules.max_dim, 255);
+        assert!(!rules.mode24, "gen2 has no mode 24 opcode at all");
+
+        // A gen2 lineage whose firmware was never disassembled stays
+        // refused, family alone is not evidence.
+        let other = all()
+            .into_iter()
+            .find(|d| {
+                d.family == "gen2"
+                    && d.screen.is_some()
+                    && (d.internal_name.starts_with("ry6609_")
+                        || d.internal_name.starts_with("ry6602_"))
+            })
+            .expect("an ry66xx screen board is in the registry");
+        assert!(other.screen_draw().is_none(), "{}", other.internal_name);
+    }
+
+    /// The 320px ry5088 panels arrive at the chip as a width of 64, because
+    /// it reads the box's low byte and subtracts. They must be refused on
+    /// size, not drawn wrong.
+    #[test]
+    fn oversized_panels_are_refused_where_the_box_is_a_low_byte() {
+        for id in [3728u32, 4051, 4161] {
+            let d = by_id(id).unwrap_or_else(|| panic!("device {id} present"));
+            let rules = d.screen_draw().expect("ry5088 lineage draws");
+            let screen = d.screen.expect("has a screen");
+            assert!(
+                screen.w > rules.max_dim || screen.h > rules.max_dim,
+                "device {id} should trip the dimension limit"
+            );
+        }
+    }
+
+    #[test]
+    fn every_device_has_a_family_and_unevidenced_ones_are_read_only() {
+        for d in all() {
+            assert!(!d.family.is_empty(), "device {} has no family", d.id);
+            let known = matches!(d.family.as_str(), "yc500" | "gen2");
+            assert_eq!(d.writes_supported(), known, "device {}", d.id);
+        }
+    }
+
+    /// Boards and corrections the vendor bundle cannot supply: one the vendor
+    /// removed, one it never listed, and boards it points at the wrong layout.
+    /// `tools/extract_vendor_data.py` merges `data/devices.extra.json` into the
+    /// registry it writes, so regenerating without the extras silently drops
+    /// real hardware or reinstates a layout known to be wrong. Fail instead.
+    ///
+    /// Whole entries are checked field by field. An `_override` entry carries
+    /// only the fields it replaces, so each is compared on its own terms.
+    #[test]
+    fn hand_added_boards_survive_a_regeneration() {
+        static EXTRA_JSON: &str = include_str!("../data/devices.extra.json");
+        let entries: Vec<serde_json::Value> =
+            serde_json::from_str(EXTRA_JSON).expect("devices.extra.json parses");
+        assert!(!entries.is_empty(), "extras file is empty");
+        let mut wholes = 0;
+        let mut overrides = 0;
+        for e in entries {
+            let id = e["id"].as_u64().expect("every entry has an id") as u32;
+            let got = by_id(id)
+                .unwrap_or_else(|| panic!("device {id} is in the extras but not the registry"));
+            if e.get("_override")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                overrides += 1;
+                let have = serde_json::to_value(&got).unwrap();
+                for (key, want) in e.as_object().unwrap() {
+                    if key.starts_with('_') || key == "id" {
+                        continue;
+                    }
+                    assert_eq!(
+                        &have[key], want,
+                        "device {id} field {key} lost its override"
+                    );
+                }
+            } else {
+                wholes += 1;
+                let want: DeviceSpec =
+                    serde_json::from_value(e).expect("whole entry parses as DeviceSpec");
+                assert_eq!(got.family, want.family, "device {id} family");
+                assert_eq!(got.vendor_id, want.vendor_id, "device {id} vendor id");
+                assert_eq!(got.product_id, want.product_id, "device {id} product id");
+                // The extractor may point a board at its own keymap's copy of
+                // the picture the entry names, `Name~k2`; the name still holds.
+                // An entry may also name a copy outright, for a board whose
+                // keymap is known but whose id the extractor cannot group.
+                let base = got.key_layout.split("~k").next().unwrap_or("");
+                assert!(
+                    got.key_layout == want.key_layout || base == want.key_layout,
+                    "device {id} layout: {} is not {}",
+                    got.key_layout,
+                    want.key_layout
+                );
+            }
+        }
+        assert!(wholes > 0 && overrides > 0, "expected both kinds of entry");
+    }
+
+    /// A layout named `Local*` is hand-maintained from hardware evidence for a
+    /// board no vendor layout fits. It survives regeneration only because the
+    /// file says `"local": true`; a tool that rewrites one and drops the flag
+    /// leaves a file the next extraction deletes, and the boards pointing at it
+    /// fall back to a bare slot grid with nothing failing in between.
+    #[test]
+    fn local_layouts_stay_local() {
+        static LOCAL: &[(&str, &str)] = &[
+            (
+                "Local98_RXSTORM_RX980",
+                include_str!("../../src/lib/layouts/vendor/Local98_RXSTORM_RX980.json"),
+            ),
+            (
+                "Local98_Akko_3098B",
+                include_str!("../../src/lib/layouts/vendor/Local98_Akko_3098B.json"),
+            ),
+            (
+                "Local68_Chronos68",
+                include_str!("../../src/lib/layouts/vendor/Local68_Chronos68.json"),
+            ),
+            (
+                "Local81_DarmosharkTop75",
+                include_str!("../../src/lib/layouts/vendor/Local81_DarmosharkTop75.json"),
+            ),
+            (
+                "Local87_KiiP_Y87",
+                include_str!("../../src/lib/layouts/vendor/Local87_KiiP_Y87.json"),
+            ),
+            (
+                "Local82_K600B82",
+                include_str!("../../src/lib/layouts/vendor/Local82_K600B82.json"),
+            ),
+            (
+                "Local87_Typhoon_TKL",
+                include_str!("../../src/lib/layouts/vendor/Local87_Typhoon_TKL.json"),
+            ),
+            (
+                "Local81_KOODO_Solar",
+                include_str!("../../src/lib/layouts/vendor/Local81_KOODO_Solar.json"),
+            ),
+            (
+                "Local82_VGN_Neon75_Extreme",
+                include_str!("../../src/lib/layouts/vendor/Local82_VGN_Neon75_Extreme.json"),
+            ),
+            (
+                "Local82_Akko_5075B_Plus_S",
+                include_str!("../../src/lib/layouts/vendor/Local82_Akko_5075B_Plus_S.json"),
+            ),
+            (
+                "Local81_Atas_A75",
+                include_str!("../../src/lib/layouts/vendor/Local81_Atas_A75.json"),
+            ),
+            (
+                "Local61_Luminkey60_Pro",
+                include_str!("../../src/lib/layouts/vendor/Local61_Luminkey60_Pro.json"),
+            ),
+            (
+                "Local68_Akko_MOD68",
+                include_str!("../../src/lib/layouts/vendor/Local68_Akko_MOD68.json"),
+            ),
+            (
+                "Local105_Siukie_ACH105W",
+                include_str!("../../src/lib/layouts/vendor/Local105_Siukie_ACH105W.json"),
+            ),
+            (
+                "Local80_Epomaker_TH80",
+                include_str!("../../src/lib/layouts/vendor/Local80_Epomaker_TH80.json"),
+            ),
+            (
+                "Local98_Epomaker_RT100_Wired",
+                include_str!("../../src/lib/layouts/vendor/Local98_Epomaker_RT100_Wired.json"),
+            ),
+        ];
+        for (name, text) in LOCAL {
+            let v: serde_json::Value = serde_json::from_str(text).expect("parses");
+            assert_eq!(
+                v["local"],
+                serde_json::json!(true),
+                "{name} lost its local flag"
+            );
+            assert!(
+                all().iter().any(|d| d.key_layout == *name),
+                "no board points at {name}, so nothing keeps it honest"
+            );
+        }
+        for d in all().iter().filter(|d| d.key_layout.starts_with("Local")) {
+            assert!(
+                LOCAL.iter().any(|(name, _)| *name == d.key_layout),
+                "device {} names a local layout this test does not check exists",
+                d.id
+            );
+        }
+    }
+
+    /// A bundle has to name the build it came from, or a report from between
+    /// two releases cannot be placed. The commit is absent in a tarball build,
+    /// so only the version prefix is guaranteed.
+    #[test]
+    fn build_id_starts_with_the_version() {
+        let id = build_id();
+        println!("build id: {id}");
+        assert!(
+            id.starts_with(env!("CARGO_PKG_VERSION")),
+            "build id {id} does not start with the crate version"
+        );
+    }
+
+    #[test]
+    fn bulk_keymap_boards_are_plain_yc500() {
+        for d in all().iter().filter(|d| d.bulk_keymap) {
+            assert_ne!(
+                d.family, "gen2",
+                "device {} bulk keymap on a gen2 board",
+                d.id
+            );
+            assert!(!d.magnetic, "device {} bulk keymap with sub-layers", d.id);
+        }
+    }
+
+    #[test]
+    fn side_light_flag_tracks_the_registry_layout() {
+        for d in all() {
+            assert_eq!(
+                d.features.side_light,
+                !d.side_light_layout.is_empty(),
+                "device {} disagrees about its edge light",
+                d.id
+            );
+        }
+    }
+
+    #[test]
+    fn discovery_covers_every_vendor_in_the_registry() {
+        let ids = vendor_ids();
+        assert!(
+            ids.contains(&crate::protocol::VENDOR_ID),
+            "the ROYUAN OEM id"
+        );
+        // A board whose vendor id is not scanned for can never be found, no
+        // matter what the support list says about it.
+        for d in all() {
+            assert!(
+                ids.contains(&d.vendor_id),
+                "device {} ({:04x}) is in the registry but would never be discovered",
+                d.id,
+                d.vendor_id
+            );
+        }
+        assert!(
+            ids.len() > 1,
+            "the registry has boards under several vendor ids; do not hardcode one"
+        );
+    }
+
+    /// The udev rule is written out in three places and has drifted in two of
+    /// them already. A vendor id missing from any one of them leaves that
+    /// board's node owned by root, and the app reports "no device" with the
+    /// keyboard plugged in, which reads as the rule having failed rather than
+    /// being incomplete.
+    #[test]
+    fn every_copy_of_the_udev_rule_covers_the_whole_registry() {
+        let copies = [
+            // installed by the .deb, .rpm and Arch packages
+            (
+                "packaging/70-sharkfin.rules",
+                include_str!("../../../packaging/70-sharkfin.rules"),
+            ),
+            // offered for pasting by the Linux permission panel
+            (
+                "app/src/components/PermissionNotice.tsx",
+                include_str!("../../src/components/PermissionNotice.tsx"),
+            ),
+            // inlined in every release's notes
+            (
+                ".github/release-notes.md",
+                include_str!("../../../.github/release-notes.md"),
+            ),
+        ];
+        for (what, text) in copies {
+            for vid in vendor_ids() {
+                assert!(
+                    text.contains(&format!("{vid:04x}")),
+                    "vendor {vid:04x} is missing from the udev rule in {what}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn labels_are_never_empty() {
+        for d in all() {
+            assert!(!d.label().trim().is_empty(), "device {} has no label", d.id);
+        }
+    }
+}

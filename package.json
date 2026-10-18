@@ -1,0 +1,15 @@
+{
+  "name": "rx980-local",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/whyIMBA/rx980",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node scripts/start-local.cjs",
+    "stop": "node scripts/stop-local.cjs",
+    "build:web": "node scripts/build-web.cjs",
+    "test:ui:replay": "node scripts/ui-smoke.cjs --replay"
+  },
+  "devDependencies": { "playwright": "1.58.2" }
+}

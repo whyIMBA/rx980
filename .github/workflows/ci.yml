@@ -1,0 +1,53 @@
+name: RX980 checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  web-and-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sharkfin/app/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            sharkfin/tools/core-check -> ../../../.build/rust
+            sharkfin/app/src-web -> ../../../.build/rust
+      - name: Core lint and tests
+        run: sh scripts/check-core-linux.sh
+      - name: Install matching Wasm binding tool
+        run: cargo install wasm-bindgen-cli --version 0.2.126 --locked
+      - name: Build Wasm and generated bindings
+        run: sh scripts/build-core-linux.sh --build-only
+      - name: Frontend dependencies and tests
+        working-directory: sharkfin/app
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx tsc -p tsconfig.web.json --noEmit
+          npx vitest run
+      - name: Registry and layouts
+        working-directory: sharkfin
+        run: |
+          python tools/coverage.py --markdown
+          git diff --exit-code -- docs/BOARDS.md
+          python tools/lint_layouts.py
+      - name: Build browser app
+        run: node scripts/build-web.cjs

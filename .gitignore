@@ -1,0 +1,26 @@
+# Local dependencies, tools, generated applications and personal device data.
+/.build/
+/.toolchain/
+/.venv/
+/.runtime/
+/backups/
+/reports/
+/logs/
+/outputs/
+/downloads/
+/upstream-web/
+/node_modules/
+**/node_modules/
+**/target/
+**/dist/
+**/dist-web/
+**/src-web/pkg/
+**/__pycache__/
+*.py[cod]
+*.log
+.env
+.env.*
+!.env.example
+**/HANDOFF.md
+.DS_Store
+Thumbs.db

@@ -1,0 +1,586 @@
+// SPDX-FileCopyrightText: JR Lanteigne <root@dnim.dev>
+// SPDX-License-Identifier: GPL-3.0-or-later
+import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PageHeader, Section } from "@/components/Page";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import {
+  exportConfig,
+  factoryReset,
+  getScreenVersion,
+  writeScreenImage,
+  getSettings,
+  importConfig,
+  setAutoOs,
+  setClock,
+  setDebounce,
+  setOptions,
+  setSleep,
+  type ConnectedDevice,
+  type DeviceSpec,
+  type DeviceSettings,
+  type KbOptions,
+  type SleepTimes,
+} from "@/lib/backend";
+import { deviceLabel } from "@/lib/brands";
+import { t } from "@/lib/i18n";
+import Waiting from "@/components/Waiting";
+
+const SLEEP_MIN = 60;
+const SLEEP_MAX = 3600;
+const DEEP_MIN = 600;
+
+// Drawing only where firmware is known to parse the frame. Three lineages;
+// every other gen2 board is refused here and in the backend.
+function drawRules(
+  spec: DeviceSpec,
+): { maxFrame: number; maxDim: number; mode24: boolean } | null {
+  if (spec.family === "yc500")
+    return { maxFrame: 65535, maxDim: 255, mode24: true };
+  if (spec.family !== "gen2") return null;
+  if (spec.internalName.startsWith("yc3123_"))
+    return { maxFrame: 0xffffffff, maxDim: 65535, mode24: false };
+  if (spec.internalName.startsWith("ry5088_"))
+    return { maxFrame: 65535, maxDim: 255, mode24: false };
+  return null;
+}
+
+function canDraw(spec: DeviceSpec): boolean {
+  const rules = drawRules(spec);
+  if (!rules || !spec.screen) return false;
+  const { w, h, mode } = spec.screen;
+  if (mode !== "16" && !(mode === "24" && rules.mode24)) return false;
+  if (w > rules.maxDim || h > rules.maxDim) return false;
+  return w * h * (mode === "24" ? 3 : 2) <= rules.maxFrame;
+}
+
+// No firmware evidence for the draw path, as opposed to a panel we cannot address.
+function drawsElsewhere(spec: DeviceSpec): boolean {
+  return drawRules(spec) === null;
+}
+
+function mins(seconds: number) {
+  if (seconds === 0) return t("off");
+  const m = Math.round(seconds / 60);
+  return m >= 60
+    ? t("{h} h", { h: (m / 60).toFixed(1) })
+    : t("{m} min", { m });
+}
+
+function Row({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <Label className="text-sm">{label}</Label>
+        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Debounce and sleep are flash. Drag previews; write once on release.
+
+export default function DevicePage({
+  device,
+}: {
+  device: ConnectedDevice | null;
+}) {
+  const [s, setS] = useState<DeviceSettings | null>(null);
+  // The scan replaces this object every few seconds, and on a receiver link
+  // its battery percent moves with it. Reload on the board, not the object,
+  // or a drag in progress is overwritten by the read.
+  const board = device ? `${device.spec.id}:${device.path}` : null;
+
+  const load = useCallback(() => {
+    getSettings()
+      .then(setS)
+      .catch((e) => toast.error(t("Failed to read settings: {e}", { e })));
+  }, []);
+
+  useEffect(() => {
+    if (board) load();
+    else setS(null);
+  }, [board, load]);
+
+  // The display is a second chip with its own firmware. Asking it for a
+  // version is the one screen command that means the same thing on both
+  // protocol families, so it is safe on any board: one without a display
+  // echoes the previous reply and comes back null.
+  const [screenVersion, setScreenVersion] = useState<number | null>(null);
+  useEffect(() => {
+    if (!board) {
+      setScreenVersion(null);
+      return;
+    }
+    let live = true;
+    getScreenVersion()
+      .then((v) => live && setScreenVersion(v))
+      .catch(() => {
+        // A board that will not answer simply has no display to report.
+      });
+    return () => {
+      live = false;
+    };
+  }, [board]);
+
+  // The display wants exactly its own pixels, so the picture is scaled here
+  // and handed over as plain RGB. Everything about the display's byte order
+  // lives in the backend, where the pacing is.
+  const [drawing, setDrawing] = useState(false);
+  // Which of the display's picture slots the next upload goes to. The
+  // keyboard picks which slot it shows from its own keys, so a picture
+  // sent to the wrong one looks like nothing happened.
+  const [slot, setSlot] = useState(0);
+  const slots = Math.max(1, device?.spec.screen?.layers ?? 1);
+  const drawImage = async (file: File) => {
+    const screen = device?.spec.screen;
+    if (!screen) return;
+    setDrawing(true);
+    try {
+      const bitmap = await createImageBitmap(file);
+      const canvas = document.createElement("canvas");
+      canvas.width = screen.w;
+      canvas.height = screen.h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error(t("could not prepare the picture"));
+      // Cover rather than stretch: a squashed photo looks like a bug.
+      const scale = Math.max(screen.w / bitmap.width, screen.h / bitmap.height);
+      const w = bitmap.width * scale;
+      const h = bitmap.height * scale;
+      ctx.drawImage(bitmap, (screen.w - w) / 2, (screen.h - h) / 2, w, h);
+      const { data } = ctx.getImageData(0, 0, screen.w, screen.h);
+      const rgb = new Array<number>(screen.w * screen.h * 3);
+      for (let i = 0, j = 0; i < data.length; i += 4) {
+        rgb[j++] = data[i];
+        rgb[j++] = data[i + 1];
+        rgb[j++] = data[i + 2];
+      }
+      await writeScreenImage(rgb, slot);
+      toast.success(
+        slots > 1
+          ? t("Picture sent to slot {n} of {m}.", { n: slot + 1, m: slots })
+          : t("Picture sent to the display."),
+      );
+    } catch (e) {
+      toast.error(t("Could not draw the picture: {e}", { e: String(e) }));
+    } finally {
+      setDrawing(false);
+    }
+  };
+
+  /// Preview only. Nothing reaches the keyboard until commitSleep.
+  const pushSleep = (patch: Partial<SleepTimes>) =>
+    setS((prev) => (prev ? { ...prev, sleep: { ...prev.sleep, ...patch } } : prev));
+
+  const commitSleep = (patch: Partial<SleepTimes>) =>
+    setS((prev) => {
+      if (!prev) return prev;
+      const sleep = { ...prev.sleep, ...patch };
+      setSleep(sleep).catch((e) => toast.error(t("Write failed: {e}", { e })));
+      return { ...prev, sleep };
+    });
+
+  /// Preview only. Nothing reaches the keyboard until commitDebounce.
+  const pushDebounce = (value: number) =>
+    setS((prev) => (prev ? { ...prev, debounce: value } : prev));
+
+  const commitDebounce = (value: number) => {
+    setS((prev) => (prev ? { ...prev, debounce: value } : prev));
+    setDebounce(value).catch((e) => toast.error(t("Write failed: {e}", { e })));
+  };
+
+  const pushAutoOs = (enabled: boolean) => {
+    setS((prev) => (prev ? { ...prev, autoOs: enabled } : prev));
+    setAutoOs(enabled).catch((e) => toast.error(t("Write failed: {e}", { e })));
+  };
+
+  const doSetClock = async () => {
+    try {
+      await setClock(new Date());
+      toast.success(t("Clock set."));
+    } catch (e) {
+      toast.error(t("Could not set the clock: {e}", { e: String(e) }));
+    }
+  };
+
+  const doReset = async () => {
+    try {
+      await factoryReset();
+      toast.success(t("Factory reset sent. The board reboots its settings."));
+      setS(null);
+      setTimeout(load, 4500);
+    } catch (e) {
+      toast.error(t("Reset failed: {e}", { e: String(e) }));
+    }
+  };
+
+  const [transferring, setTransferring] = useState(false);
+
+  const doExport = async () => {
+    const path = await save({
+      defaultPath: `${deviceLabel(device!.spec).split(" ").join("-")}.sharkfin.json`,
+      filters: [{ name: t("sharkfin config"), extensions: ["json"] }],
+    });
+    if (!path) return;
+    setTransferring(true);
+    try {
+      toast.success(await exportConfig(path));
+    } catch (e) {
+      toast.error(t("Export failed: {e}", { e: String(e) }));
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  const doImport = async () => {
+    const path = await open({
+      multiple: false,
+      filters: [{ name: t("sharkfin config"), extensions: ["json"] }],
+    });
+    if (typeof path !== "string") return;
+    setTransferring(true);
+    try {
+      toast.success(await importConfig(path));
+      load();
+    } catch (e) {
+      toast.error(t("Import failed: {e}", { e: String(e) }));
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  const pushOptions = (patch: Partial<KbOptions>) => {
+    setS((prev) => {
+      if (!prev?.options) return prev;
+      const options = { ...prev.options, ...patch };
+      setOptions(options).catch((e) => toast.error(t("Write failed: {e}", { e })));
+      return { ...prev, options };
+    });
+  };
+
+  if (!device) {
+    return (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        {t("Connect your keyboard.")}
+      </div>
+    );
+  }
+  if (!s) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Waiting label={t("Reading device settings…")} />
+      </div>
+    );
+  }
+
+  const wireless = device.spec.features.sleep24 || device.spec.features.sleepBT;
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-8 p-6">
+      <PageHeader
+        title={t("Device")}
+        hint={t("{label} · firmware {revision} · device ID {deviceId} · {profiles} profiles", {
+          label: deviceLabel(device.spec),
+          revision: s.revision,
+          deviceId: device.deviceId,
+          profiles: device.spec.profiles,
+        })}
+      />
+
+      <Section title={t("Switches")}>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <Label>{t("Debounce")}</Label>
+              <span className="text-muted-foreground">{s.debounce}</span>
+            </div>
+            <Slider
+              min={1}
+              max={10}
+              step={1}
+              value={[s.debounce]}
+              onValueChange={([v]) => pushDebounce(v)}
+              onValueCommit={([v]) => commitDebounce(v)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("Lower reacts faster; raise it if a switch starts chattering.")}
+            </p>
+          </div>
+      </Section>
+
+      {(device.spec.screen || screenVersion !== null) && (
+        <Section title={t("Display")}>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <Label>{t("Size")}</Label>
+              <span className="text-muted-foreground">
+                {device.spec.screen
+                  ? t("{w} by {h}", {
+                      w: device.spec.screen.w,
+                      h: device.spec.screen.h,
+                    })
+                  : t("not recorded")}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <Label>{t("Colour")}</Label>
+              <span className="text-muted-foreground">
+                {device.spec.screen
+                  ? device.spec.screen.mode === "24"
+                    ? t("24-bit")
+                    : t("16-bit")
+                  : t("not recorded")}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <Label>{t("Firmware")}</Label>
+              <span className="text-muted-foreground">
+                {screenVersion === null
+                  ? t("no answer")
+                  : screenVersion.toString(16)}
+              </span>
+            </div>
+            {canDraw(device.spec) && (
+              <div className="space-y-2 pt-2">
+                {slots > 1 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <Label>{t("Slot")}</Label>
+                    <Select value={String(slot)} onValueChange={(v) => setSlot(Number(v))} disabled={drawing}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: slots }, (_, i) => (
+                          <SelectItem key={i} value={String(i)}>
+                            {t("{n} of {m}", { n: i + 1, m: slots })}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="block w-full text-sm file:mr-3 file:rounded-md file:border-0
+                             file:bg-secondary file:px-3 file:py-1.5 file:text-sm"
+                  disabled={drawing || device.link === "receiver"}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) drawImage(file);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {device.link === "receiver"
+                    ? t("Connect the keyboard by cable to send a picture.")
+                    : drawing
+                      ? t("Writing. Leave the keyboard plugged in.")
+                      : slots > 1
+                        ? t("The picture is scaled to fit and goes to the chosen slot. The keyboard switches between slots from its own keys.")
+                        : t("The picture is scaled to fit and replaces what is on the display.")}
+                </p>
+              </div>
+            )}
+            {device.spec.screen &&
+              !canDraw(device.spec) &&
+              !drawsElsewhere(device.spec) && (
+              <p className="text-xs text-muted-foreground">
+                {t("sharkfin reads this display but cannot draw on it yet.")}
+              </p>
+            )}
+            {device.spec.screen && drawsElsewhere(device.spec) && (
+              <p className="text-xs text-muted-foreground">
+                {t("sharkfin reads this display but cannot draw on it. The picture goes through a separate chip on this board.")}
+              </p>
+            )}
+            {!device.spec.screen && (
+              <p className="text-xs text-muted-foreground">
+                {t("sharkfin reads this display but cannot draw on it: its size is not recorded.")}
+              </p>
+            )}
+            <div className="pt-2">
+              <Row
+                label={t("Clock")}
+                hint={
+                  device.link === "receiver"
+                    ? t("Connect the keyboard by cable to set the clock.")
+                    : t("Set to this computer's time.")
+                }
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={device.link === "receiver"}
+                  onClick={doSetClock}
+                >
+                  {t("Set clock")}
+                </Button>
+              </Row>
+            </div>
+          </div>
+        </Section>
+      )}
+
+      <Section title={t("Behaviour")}>
+        <div className="space-y-3">
+          {s.options ? (
+            <>
+              <Row
+                label={t("Windows key lock")}
+                hint={t("Ignore the Win key while gaming")}
+              >
+                <Switch
+                  checked={s.options.winLock}
+                  onCheckedChange={(v) => pushOptions({ winLock: v })}
+                />
+              </Row>
+              <Row label={t("Swap WASD and arrows")}>
+                <Switch
+                  checked={s.options.wasdSwap}
+                  onCheckedChange={(v) => pushOptions({ wasdSwap: v })}
+                />
+              </Row>
+              <Row label={t("Backlight off")}>
+                <Switch
+                  checked={s.options.ledOff}
+                  onCheckedChange={(v) => pushOptions({ ledOff: v })}
+                />
+              </Row>
+            </>
+          ) : (
+            <p className="py-2 text-sm text-muted-foreground">
+              {t("This board's protocol family reports its switches in a layout sharkfin hasn't decoded, so they're hidden rather than shown wrong.")}
+            </p>
+          )}
+          {s.autoOsSupported !== false && (
+            <Row
+              label={t("Auto-detect host OS")}
+              hint={t("Board picks its Windows or macOS layer by itself")}
+            >
+              <Switch
+                checked={s.autoOs}
+                onCheckedChange={pushAutoOs}
+              />
+            </Row>
+          )}
+          {s.options && (
+            <Row label={t("Layout mode")} hint={t("Switched on the keyboard itself")}>
+              <span className="text-sm text-muted-foreground">
+                {s.options.macMode ? "macOS" : "Windows"}
+              </span>
+            </Row>
+          )}
+        </div>
+      </Section>
+
+      <Section title={t("Backup")}>
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">
+            {t("Keymaps for every profile and layer, lighting and settings, as one file. Per-key paint patterns live in the Paint tab, because the firmware can't report those back.")}
+          </p>
+          <div className="flex shrink-0 gap-2">
+            <Button size="sm" variant="ghost" disabled={transferring} onClick={doExport}>
+              {t("Export")}
+            </Button>
+            <Button size="sm" variant="ghost" disabled={transferring} onClick={doImport}>
+              {transferring ? t("Working…") : t("Import")}
+            </Button>
+          </div>
+        </div>
+      </Section>
+
+      <Section title={t("Factory reset")}>
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">
+            {device?.link === "receiver"
+              ? t("Connect the keyboard by cable to reset it.")
+              : t("Clears every onboard profile, keymap, macro and light setting.")}
+          </p>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="destructive" size="sm" disabled={device?.link === "receiver"}>
+                {t("Reset")}
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{t("Factory reset this keyboard?")}</DialogTitle>
+                <DialogDescription>
+                  {t("Every profile, remapped key, macro and lighting setting stored on the board is erased. This cannot be undone from here.")}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="destructive" onClick={doReset}>
+                  {t("Erase and reset")}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </Section>
+
+      {wireless && (
+        <Section title={t("Wireless sleep")}>
+          <div className="grid gap-6 sm:grid-cols-2">
+            {(
+              [
+                ["sleep24", t("Sleep · 2.4 GHz"), "sleep24" as const, SLEEP_MIN],
+                ["sleepBT", t("Sleep · Bluetooth"), "sleepBt" as const, SLEEP_MIN],
+                ["sleep24", t("Deep sleep · 2.4 GHz"), "deep24" as const, DEEP_MIN],
+                ["sleepBT", t("Deep sleep · Bluetooth"), "deepBt" as const, DEEP_MIN],
+              ] as const
+            ).map(([feature, label, key, min]) =>
+              device.spec.features[feature] ? (
+                <div key={key} className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <Label>{label}</Label>
+                    <span className="text-muted-foreground">
+                      {mins(s.sleep[key])}
+                    </span>
+                  </div>
+                  <Slider
+                    min={min}
+                    max={SLEEP_MAX}
+                    step={60}
+                    value={[Math.max(s.sleep[key], min)]}
+                    onValueChange={([v]) => pushSleep({ [key]: v })}
+                    onValueCommit={([v]) => commitSleep({ [key]: v })}
+                  />
+                </div>
+              ) : null,
+            )}
+          </div>
+        </Section>
+      )}
+    </div>
+  );
+}

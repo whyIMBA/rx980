@@ -1,0 +1,344 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  # tauri-action creates the draft release when it cannot find one, and the
+  # three build jobs start within seconds of each other. In v0.2.7 two of
+  # them created one each: the published release carried the Linux binaries
+  # and the Windows and macOS ones sat on a second, still-draft release
+  # nobody could see. The draft is made once here, so the builds only ever
+  # upload into an existing one.
+  prepare:
+    name: Draft the release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "release $TAG already exists, leaving it alone"
+            exit 0
+          fi
+          gh release create "$TAG" --repo "${{ github.repository }}" \
+            --draft \
+            --title "sharkfin $TAG" \
+            --notes-file .github/release-notes.md
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 22.04 is the glibc floor. The linker stamps symbol versions from
+          # the libc it links, and the AppImage copies this machine's
+          # libraries. ubuntu-latest is newer, and that stamp will not load
+          # on Ubuntu 22.04 or Debian 12. Do not move this job to latest.
+          - os: ubuntu-22.04
+            args: ""
+          - os: windows-latest
+            args: ""
+          - os: macos-latest
+            args: "--target universal-apple-darwin"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          # The runners' Azure mirror route stalls for hours at times
+          # (actions/runner-images#14823). Take packages from kernel.org,
+          # drop a transfer that goes quiet, and try again on failure.
+          printf 'https://mirrors.edge.kernel.org/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n' \
+            | sudo tee /etc/apt/apt-mirrors.txt
+          aptget() {
+            for i in 1 2 3; do
+              timeout 600 sudo apt-get -o Acquire::Retries=3 \
+                -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15 "$@" && return
+            done
+            return 1
+          }
+          aptget update
+          aptget install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libayatana-appindicator3-dev libssl-dev libxdo-dev \
+            libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libudev-dev \
+            squashfs-tools binutils zsync
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      # The cache key otherwise only says Linux, so a binary cached on
+      # ubuntu-latest is restored here and the build does not start.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+          prefix-key: ${{ matrix.os }}
+
+      - run: npm ci
+        working-directory: app
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # linuxdeploy passes this to appimagetool, which writes it into the
+          # AppImage runtime. The .zsync made at the same time describes the
+          # image before the repack below, so that file is not uploaded.
+          LDAI_UPDATE_INFORMATION: ${{ runner.os == 'Linux' && 'gh-releases-zsync|dniminenn|sharkfin|latest|sharkfin_*_amd64.AppImage.zsync' || '' }}
+        with:
+          projectPath: app
+          tagName: ${{ github.ref_name }}
+          releaseName: "sharkfin ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      # Tauri writes AppRun at mode 0770. linuxdeploy renames it to
+      # AppRun.wrapped and leaves the mode. A normal launch ignores it; the
+      # catalog mounts the image in a way that enforces it, and the file
+      # will not run. Repack with the bit set, then replace the draft asset.
+      # The same step refuses the upload if any shipped ELF needs a glibc
+      # newer than 2.35. The update line survives in the runtime header.
+      # zsyncmake runs after the repack, because the .zsync has to describe
+      # these bytes.
+      - name: Fix the AppImage and check the glibc floor
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          imgs=(app/src-tauri/target/release/bundle/appimage/*.AppImage)
+          if [ "${#imgs[@]}" -ne 1 ]; then
+            echo "expected one AppImage, found ${#imgs[@]}" >&2
+            exit 1
+          fi
+          img=${imgs[0]}
+          chmod 0755 "$img"
+          work=$(mktemp -d)
+          offset=$("$img" --appimage-offset | tr -d '[:space:]')
+          unsquashfs -o "$offset" -d "$work/root" "$img"
+          python3 tools/glibc_floor.py \
+            app/src-tauri/target/release/sharkfin \
+            "$work/root"
+          chmod 0755 "$work/root/AppRun" "$work/root/AppRun.wrapped"
+          # The image carries its own glib, and GIO loads the host's modules
+          # into it. A newer host (Debian 13 gvfs, issue #2) fails the symbol
+          # lookup and prints two errors per launch. Point GIO at the image.
+          grep -q 'apprun-hooks' "$work/root/AppRun"
+          cat > "$work/root/apprun-hooks/sharkfin-gio.sh" <<'HOOK'
+          export GIO_MODULE_DIR="$APPDIR/usr/lib/gio/modules"
+          HOOK
+          comp=$(unsquashfs -s -o "$offset" "$img" | sed -n 's/^Compression //p' | head -1)
+          mksquashfs "$work/root" "$work/new.sqfs" -comp "$comp" -noappend -all-root -no-progress
+          head -c "$offset" "$img" > "$work/fixed.AppImage"
+          cat "$work/new.sqfs" >> "$work/fixed.AppImage"
+          chmod 0755 "$work/fixed.AppImage"
+          off2=$("$work/fixed.AppImage" --appimage-offset | tr -d '[:space:]')
+          unsquashfs -o "$off2" -d "$work/check" "$work/fixed.AppImage" \
+            AppRun.wrapped \
+            apprun-hooks/sharkfin-gio.sh \
+            usr/share/metainfo/com.getsharkfin.sharkfin.metainfo.xml \
+            usr/share/metainfo/com.getsharkfin.sharkfin.appdata.xml
+          mode=$(stat -c %a "$work/check/AppRun.wrapped")
+          if [ "$mode" != "755" ]; then
+            echo "AppRun.wrapped is mode $mode" >&2
+            exit 1
+          fi
+          grep -q 'GIO_MODULE_DIR' "$work/check/apprun-hooks/sharkfin-gio.sh"
+          grep -q '<id>com.getsharkfin.sharkfin</id>' \
+            "$work/check/usr/share/metainfo/com.getsharkfin.sharkfin.metainfo.xml"
+          grep -q 'https://getsharkfin.com/' \
+            "$work/check/usr/share/metainfo/com.getsharkfin.sharkfin.appdata.xml"
+          info=$("$work/fixed.AppImage" --appimage-updateinformation 2>/dev/null | tr -d '\000[:space:]' || true)
+          expect='gh-releases-zsync|dniminenn|sharkfin|latest|sharkfin_*_amd64.AppImage.zsync'
+          if [ "$info" != "$expect" ]; then
+            echo "update information is '$info'" >&2
+            exit 1
+          fi
+          mv "$work/fixed.AppImage" "$img"
+          base=$(basename "$img")
+          url="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${base}"
+          rm -f "${img}.zsync"
+          zsyncmake -u "$url" -f "$base" -o "${img}.zsync" "$img"
+          grep -q -F "URL: ${url}" "${img}.zsync"
+          gh release upload "${{ github.ref_name }}" "$img" "${img}.zsync" \
+            --repo "${{ github.repository }}" --clobber
+
+  # The browser build is the same protocol core over WebHID. It ships as a
+  # release asset so the site can pin a version instead of tracking master;
+  # the pin lives in the getsharkfin repo. Needs `build` only because
+  # Uploads into the draft, so it only needs that to exist and runs
+  # alongside the desktop builds.
+  web:
+    name: Browser build
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-web
+
+      - run: cargo install wasm-pack --locked
+
+      - run: npm ci
+        working-directory: app
+
+      - run: npm run web:build
+        working-directory: app
+
+      # Contents, not a wrapping directory, so it unpacks straight into the
+      # site's public/app. The two stock Vite/Tauri logos are template
+      # leftovers the site has never served.
+      - name: Pack the browser build
+        run: |
+          rm -f app/dist-web/tauri.svg app/dist-web/vite.svg
+          tar -czf "sharkfin-web-${{ github.ref_name }}.tar.gz" -C app/dist-web .
+
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" \
+            "sharkfin-web-${{ github.ref_name }}.tar.gz" \
+            --repo "${{ github.repository }}" --clobber
+
+  # tauri-action creates the release as a draft and each matrix job uploads
+  # into it. Publishing it from the build job would expose a release with only
+  # one platform's binaries in it, so it is published here instead: once, after
+  # every build has finished. A failed build leaves it a draft, which is what
+  # you want.
+  publish:
+    name: Publish
+    needs: [build, web]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Take the release out of draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --draft=false
+
+  # Both AUR packages fetch from the published release: the source package the
+  # tag tarball, the -bin package the .deb. So neither can be built before
+  # publish, hence `needs`.
+  #
+  # Both are built here before anything is pushed. A broken PKGBUILD in the AUR
+  # fails for every user who tries to install it, and the AUR expects the
+  # maintainer to have built what they upload.
+  aur:
+    name: AUR
+    needs: publish
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Arch toolchain
+        run: |
+          pacman -Syu --noconfirm --needed \
+            base-devel git openssh pacman-contrib namcap
+          # makepkg refuses to run as root, and needs root to install
+          # dependencies, so it runs as `build` with passwordless sudo.
+          useradd -m -s /bin/bash build
+          echo 'build ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/build
+          git config --global --add safe.directory '*'
+
+      - uses: actions/checkout@v4
+
+      - name: Stage the PKGBUILDs at this tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          ver="${TAG#v}"
+          echo "version $ver"
+          for p in sharkfin-keyboard sharkfin-keyboard-bin; do
+            mkdir -p "/home/build/$p"
+            cp "packaging/arch/$p/PKGBUILD" "/home/build/$p/PKGBUILD"
+            sed -i "s/^pkgver=.*/pkgver=$ver/" "/home/build/$p/PKGBUILD"
+            sed -i "s/^pkgrel=.*/pkgrel=1/" "/home/build/$p/PKGBUILD"
+          done
+          chown -R build /home/build
+
+      # updpkgsums downloads each source and rewrites the checksum, so the
+      # published PKGBUILD always matches the artifacts this tag produced
+      # rather than a value copied in by hand afterwards.
+      - name: Checksums, build and test
+        run: |
+          for p in sharkfin-keyboard sharkfin-keyboard-bin; do
+            echo "::group::$p"
+            sudo -u build bash -lc "cd /home/build/$p && updpkgsums"
+            sudo -u build bash -lc "cd /home/build/$p && makepkg -s --noconfirm --check"
+            sudo -u build bash -lc "cd /home/build/$p && makepkg --printsrcinfo > .SRCINFO"
+            # Advisory: namcap flags packaging smells but is noisy enough that
+            # a release should not hinge on it.
+            namcap /home/build/$p/*.pkg.tar.zst || true
+            echo "::endgroup::"
+          done
+
+      - name: Push to the AUR
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ver="${TAG#v}"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # The AUR's host key, written out rather than fetched. keyscan was
+          # flaky in the container, and accepting whatever key answers would
+          # hand the deploy key to anything that can sit in front of the
+          # runner. This is the ed25519 key aur.archlinux.org publishes,
+          # SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4.
+          printf '%s %s %s\n' aur.archlinux.org ssh-ed25519 \
+            AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN \
+            > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+          git config --global user.name 'dniminenn'
+          git config --global user.email 'root@dnim.dev'
+
+          for p in sharkfin-keyboard sharkfin-keyboard-bin; do
+            git clone -q "ssh://aur@aur.archlinux.org/$p.git" "/tmp/aur-$p"
+            cp "/home/build/$p/PKGBUILD" "/home/build/$p/.SRCINFO" "/tmp/aur-$p/"
+            cd "/tmp/aur-$p"
+            git add -A
+            if git diff --cached --quiet; then
+              echo "$p already at $ver"
+            else
+              git commit -q -m "$ver"
+              git push -q origin master
+              echo "$p pushed $ver"
+            fi
+            cd "$GITHUB_WORKSPACE"
+          done

@@ -1,0 +1,193 @@
+<p align="center">
+  <img src="docs/logo.svg" width="96" alt="sharkfin" />
+</p>
+
+<h1 align="center">sharkfin</h1>
+
+<p align="center">
+  Open-source configurator for Attack Shark and other ROYUAN keyboards.<br/>
+  Linux, Windows, macOS, or straight from a Chromium browser.
+</p>
+
+<p align="center">
+  <a href="https://github.com/dniminenn/sharkfin/actions/workflows/ci.yml"><img src="https://github.com/dniminenn/sharkfin/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <img src="https://img.shields.io/badge/status-beta-blue" alt="beta" />
+  <img src="https://img.shields.io/badge/Rust-CE422B?logo=rust&logoColor=white" alt="Rust" />
+  <img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later" />
+</p>
+
+![keymap editor](docs/keys-abyss.png)
+
+Remap keys, set the RGB, record macros and change device settings on 1409
+keyboards built on ROYUAN hardware: Attack Shark, Hator, ikbc, NOPPOO,
+Epomaker, Akko, MEETION, rongyuan and more.
+
+**Use a USB cable.** Over a 2.4 GHz receiver sharkfin reads whatever the
+receiver relays: some carry the settings channel, some carry nothing, and
+the same model ships with both, so there is no per-board answer. Plug the
+receiver in and the app tells you which yours is. Writes need the cable:
+factory reset, display pictures and Setup. Bluetooth has no settings
+channel. sharkfin never flashes firmware.
+
+**[Use it in a browser](https://app.getsharkfin.com/) ·
+[Download](https://github.com/dniminenn/sharkfin/releases) ·
+[Is my board supported?](docs/BOARDS.md)**
+
+By brand, with what each board has:
+[Attack Shark](https://getsharkfin.com/boards/attack-shark) ·
+[Akko](https://getsharkfin.com/boards/akko) ·
+[Epomaker](https://getsharkfin.com/boards/epomaker) ·
+[Hator](https://getsharkfin.com/boards/hator) ·
+[Kreo](https://getsharkfin.com/boards/kreo) ·
+[MageGee](https://getsharkfin.com/boards/magegee) ·
+[MonsGeek](https://getsharkfin.com/boards/monsgeek) ·
+[Royalaxe](https://getsharkfin.com/boards/royalaxe) ·
+[Skyloong](https://getsharkfin.com/boards/skyloong) ·
+[Womier](https://getsharkfin.com/boards/womier) ·
+[YUNZII](https://getsharkfin.com/boards/yunzii) ·
+[every brand](https://getsharkfin.com/boards/)
+
+## Supported boards
+
+**Beta, so back up first.**
+
+1174 of 1409 accept changes, 231 more once the board itself has said which
+command set it speaks, 4 are read-only. 368 are drawn out of the box
+and 833 more after a one-time check against your board; the rest show a
+slot grid.
+
+The check exists because two boards can share one picture and still
+disagree about which slot each key lives in, and a wrong guess sends a
+remap to the wrong key. So sharkfin trusts your keyboard over its own
+files: the picture is matched against your board's keymap and stays
+read-only until you confirm it. A picture ships built in only when every
+board sharing it agrees.
+
+Boards with magnetic switches get a Switches page: actuation and release
+point, rapid trigger and its sensitivities, dead zone, per key or for the
+whole board, the per-key kinds: dynamic keystroke, mod-tap, toggle and
+snap, with the keys they act on, and on boards that take more than one
+switch model, which one is fitted. Written only on boards whose own firmware
+has been read for it, which is the ry5088 lineage and the yc3121 magnetic
+lineage from firmware 2.00 today, and shown read-only elsewhere. Older
+yc3121 magnetic firmware takes settings but cannot report them; the page
+says so. By cable, the page can also show how far each key is pressed as
+you press it, set a key's actuation point from where you pressed it, take
+a rapid trigger step from how far you lift, and compare how deep every key
+bottoms out. Drawing a board, a key pressed on it names its slot.
+
+A board that is not in the list still works. sharkfin reads which command
+set it speaks off the board's own answers, says so, and asks before it
+writes anything. Send a report from the Contribute tab and it gets a real
+entry.
+
+If your board shows the grid, or the picture is wrong, draw it on the
+Keys page: start from a preset or the closest stored picture, and each key
+shows whether the board has it as you go. Sending the result back gets the
+board drawn for everyone who owns one.
+
+## Features
+
+- **Keys.** Remap any key, on a picture of your board, per profile. Base
+  and Fn layers, combos, and the knob (turn left, turn right, press). Writes
+  go to the keyboard immediately.
+- **Lighting.** The board's own effects, 18 on most, with direction options,
+  full RGB, brightness and speed. The page shows the effect running on a
+  picture of the board, timed from the firmware. Sliders preview as you
+  drag and write when you let go, because the keyboard keeps its lighting
+  in flash. Edge-light controls appear on boards
+  that have edge LEDs.
+- **Paint.** Colour individual keys, then send. Sending is manual and
+  rate-limited, because the pattern goes into the keyboard's flash.
+- **Macros.** Record key and mouse sequences with per-event delays into the
+  50 onboard slots, then bind a key to one: repeat, toggle, or while-held.
+- **Profiles.** Stored on the board. Most boards have four, some three or two.
+- **Backup.** Export everything to a file and restore it later.
+- **Device.** Debounce, Windows-key lock, WASD/arrow swap, backlight off,
+  host-OS auto-detect, sleep timeouts, factory reset, and the display's
+  clock on boards that have one.
+- **Colorways.** The whole app re-skins like a keycap set swap: Abyss,
+  Olivia, Laser, Botanical, 8008.
+
+![lighting, Olivia colorway](docs/lighting-olivia.png)
+
+No cloud, no telemetry, no background services. The desktop app is one
+binary and works offline; the browser build is a static page that talks to
+nothing but your keyboard. There's no report-rate setting because this
+hardware doesn't have one.
+
+## Install
+
+Nothing to install: open **[app.getsharkfin.com](https://app.getsharkfin.com/)**
+in Chrome, Edge or another Chromium browser and plug the keyboard in. The
+page reaches only the keyboard's settings channel and never sees your typing.
+It keeps working without a connection after the first visit, and the browser
+can install it as an app.
+
+For the desktop app, download a release or build it yourself:
+
+```sh
+cd app
+npm install
+npm run tauri build
+```
+
+The browser build needs the wasm toolchain
+(`rustup target add wasm32-unknown-unknown`, plus
+[wasm-pack](https://rustwasm.github.io/wasm-pack/)):
+
+```sh
+cd app
+npm install
+npm run web:build   # -> app/dist-web
+```
+
+On Linux the keyboard's device node belongs to root, so sharkfin needs a
+udev rule, browser build included. The .deb, .rpm and Arch packages
+install it; replug the keyboard after installing. For the AppImage or the
+browser, one line, then replug:
+
+```sh
+echo 'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151|0461|046a|05ac|0db0|145f|14a5|2ea8|3121|3299|331a|374a|379a|38a9|38ee|391d|3984|39a8|39ab|54ab", MODE="0660", TAG+="uaccess"' \
+  | sudo tee /etc/udev/rules.d/70-sharkfin.rules >/dev/null \
+  && sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+A rule from VIA, Vial or a vendor package may already cover it. The app
+shows this command when it finds a keyboard it cannot open.
+
+On macOS, a board that keeps its settings on its keyboard interface, such
+as the Akko 3098B, needs Input Monitoring permission for sharkfin or for
+the browser. The app asks for it and can open the settings pane; enable
+it, then quit and reopen sharkfin.
+
+## If the keyboard stops responding
+
+It happens: the firmware stops answering, and the app says the board needs a
+replug. Typing still works. In order:
+
+1. **Close sharkfin**, or the browser tab. While it's open it keeps trying to
+   reach the board.
+2. **Unplug the cable, wait ten seconds, plug it back in.** It needs to lose
+   power, not just reconnect.
+3. **Fn + Home** turns the lighting back on if the backlight is dead.
+4. **Fn + Esc**, held for about three seconds, resets the board's settings.
+5. Still wrong? Open sharkfin and use **Device, then Factory reset**.
+
+None of this touches firmware, and nothing here can leave the board
+unusable.
+
+## Contributing
+
+Bugs and board reports both start in the app's **Contribute** tab, which
+collects a read-only data bundle to paste into an issue. Development setup
+is in [CONTRIBUTING.md](CONTRIBUTING.md); the wire protocol is in
+[docs/PROTOCOL.md](docs/PROTOCOL.md).
+
+## License
+
+GPL-3.0-or-later. Components redistributed inside the builds keep their own
+terms, listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+sharkfin is an independent project, not affiliated with or endorsed by
+Attack Shark, ROYUAN or any keyboard brand.
