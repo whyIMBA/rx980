@@ -4,12 +4,19 @@
   "private": true,
   "license": "GPL-3.0-or-later",
   "repository": "https://github.com/whyIMBA/rx980",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node scripts/start-local.cjs",
     "stop": "node scripts/stop-local.cjs",
     "build:web": "node scripts/build-web.cjs",
+    "build:exe": "node scripts/build-exe.cjs",
+    "test:exe": "node scripts/exe-smoke.cjs",
     "test:ui:replay": "node scripts/ui-smoke.cjs --replay"
   },
-  "devDependencies": { "playwright": "1.58.2" }
+  "devDependencies": {
+    "playwright": "1.58.2",
+    "postject": "1.0.0-alpha.6"
+  }
 }

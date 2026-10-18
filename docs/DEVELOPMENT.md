@@ -27,6 +27,24 @@ node scripts/start-local.cjs
 node scripts/stop-local.cjs
 ```
 
+## Windows 单文件 EXE
+
+在 Windows x64 上安装根目录构建依赖，然后执行：
+
+```powershell
+npm ci --cache .runtime/npm-cache
+npm run build:exe
+npm run test:exe
+```
+
+需先生成 `outputs/rx980-local/`。构建会生成 `outputs/RX980.exe`，并复制一份到项目根目录供双击使用。EXE 内含当前 Node 运行环境和已构建网页，以 GUI 子系统启动，不显示命令窗口；仍通过本机 Edge/Chrome 的独立窗口使用 WebHID。运行时不依赖源码、系统 Node 或外部网页文件。
+
+封装采用 [Node.js 官方 SEA 机制](https://nodejs.org/api/single-executable-applications.html)和固定版本的 `postject`。首次构建需从 Node 官方仓库获取与运行环境版本匹配的许可，缓存于 `.build/exe/`，同时内嵌并随包分发。构建产物没有代码签名。全部构建临时文件位于 `.build/`、`.runtime/`，不提交生成的 EXE。
+
+`test:exe` 将 EXE 单独复制到项目 `.runtime/` 下含中文和空格的目录，清空 PATH，使用临时端口验证独立启动、全部内嵌资源、重复启动、停止及目录归属校验。测试不启动浏览器、不访问键盘，结果写入 `reports/exe-smoke.json`；不能据此认定实机写入已通过。
+
+诊断参数：`RX980.exe --no-browser` 仅启动文件服务，`RX980.exe --stop` 停止同目录的服务。测试可通过 `--port=端口号` 使用其他本机端口；启动和停止时须保持一致。EXE 所在目录需要可写，日志位于 `.runtime/launcher.log`。
+
 ## 检查
 
 ```powershell
@@ -55,4 +73,4 @@ node scripts/ui-smoke.cjs --replay
 python scripts/package_local.py
 ```
 
-打包前先完成构建和检查。`outputs/` 下生成 0.1.0 本地应用包和完整仓库源码包。源码包按 Git 跟踪列表及未忽略文件生成，不包含个人备份、浏览器数据、依赖目录及缓存。源码包可解压后按本页步骤重新构建。
+打包前先完成网页构建和检查。Windows 打包会重新构建 EXE，并在 `outputs/` 下生成包含 EXE、运行环境许可及完整仓库源码包的 0.1.0 本地应用包；其他平台仍生成脚本启动包。源码包按 Git 跟踪列表及未忽略文件生成，不包含生成的 EXE、个人备份、浏览器数据、依赖目录及缓存。源码包可解压后按本页步骤重新构建。
