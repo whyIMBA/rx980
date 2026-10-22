@@ -124,7 +124,7 @@ export default function KeyPicker({
       data-first={first}
       className="rounded-md px-2 py-1 text-xs transition-colors hover:bg-accent disabled:opacity-50 data-[first=true]:ring-1 data-[first=true]:ring-(--ring) data-[on=true]:bg-primary data-[on=true]:text-primary-foreground"
     >
-      {item.label}
+      {t(item.label)}
     </button>
   );
 
@@ -150,7 +150,7 @@ export default function KeyPicker({
         {optional && <SelectItem value="0">{t("none")}</SelectItem>}
         {COMBO_KEYS.map((k) => (
           <SelectItem key={`${field}-${k.usage}`} value={String(k.usage)}>
-            {k.label}
+            {t(k.label)}
           </SelectItem>
         ))}
       </SelectContent>
@@ -165,8 +165,8 @@ export default function KeyPicker({
           <div className="truncate text-xs text-muted-foreground">
             {current
               ? fnLayer
-                ? t("Fn layer, now {label}", { label: entryLabel(current, true) })
-                : t("now {label}", { label: entryLabel(current, false) })
+                ? t("Fn layer, now {label}", { label: t(entryLabel(current, true)) })
+                : t("now {label}", { label: t(entryLabel(current, false)) })
               : fnLayer
                 ? t("Fn layer")
                 : ""}

@@ -77,9 +77,9 @@ interface Props {
 }
 
 function describe(label: string) {
-  if (label === DISABLED_GLYPH) return "does nothing";
-  if (label === PASSTHRU_GLYPH) return "falls through to the base layer";
-  return label;
+  if (label === DISABLED_GLYPH) return t("does nothing");
+  if (label === PASSTHRU_GLYPH) return t("falls through to the base layer");
+  return t(label);
 }
 
 function pct(v: number, of: number) {
