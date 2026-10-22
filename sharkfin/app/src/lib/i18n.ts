@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: JR Lanteigne <root@dnim.dev>
 // SPDX-License-Identifier: GPL-3.0-or-later
-// UI strings are written in English where they appear; t() looks the English
-// up in the active catalog and falls back to it, so a missing entry shows
-// English rather than a key. The locale is read once at startup and switching
+// Source strings stay stable English keys; t() looks them up in the active
+// catalog and falls back to the key when a catalog entry is missing. The
+// locale is read once at startup and switching
 // reloads: language changes are rare, and a reload beats threading
 // reactivity through every string.
 import id from "./locales/id.json";
@@ -23,7 +23,7 @@ function pick(): string {
   if (stored === "en" || (stored && stored in CATALOGS)) return stored;
   const nav = (navigator.language || "en").toLowerCase();
   for (const l of Object.keys(CATALOGS)) if (nav.startsWith(l)) return l;
-  return "en";
+  return "zh";
 }
 
 export const locale = pick();
